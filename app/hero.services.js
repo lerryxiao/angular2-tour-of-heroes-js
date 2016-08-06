@@ -13,6 +13,7 @@ var HeroService = (function () {
             return HEROES.HEROES;
         }
     }
+    return HeroService;
 })();
 
 exports.HeroService = HeroService;

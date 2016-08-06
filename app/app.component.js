@@ -11,18 +11,18 @@ var AppComponent =
         selector: 'my-app',
         templateUrl: 'app/appTmpl.html',
         directives: [heroDetailComponent.HeroDetailComponent],
-        parameters:[heroService.HeroService]
+        providers:[ heroService.HeroService ]
     })
         .Class({
             constructor: [heroService.HeroService,function (heroService) {
                 this.title = "Tour of Heroes";
-                this.heroService = heroService;
+                this._heroService = heroService;
             }],
             onSelect: function (hero) {
                 this.selectedHero = hero;
             },
             getHeroes:function () {
-                this.heroes = this.heroService.getHeroes();
+                this.heroes = this._heroService.getHeroes();
             },
             ngOnInit: function () {
                 return this.getHeroes();
