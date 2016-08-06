@@ -3,35 +3,30 @@
  */
 "use strict";
 
-var HeroDetailComponent = require('./hero-detail.component');
-
-var HEROES = [
-    {id: 11, name: 'Mr. Nice'},
-    {id: 12, name: 'Narco'},
-    {id: 13, name: 'Bombasto'},
-    {id: 14, name: 'Celeritas'},
-    {id: 15, name: 'Magneta'},
-    {id: 16, name: 'RubberMan'},
-    {id: 17, name: 'Dynama'},
-    {id: 18, name: 'Dr IQ'},
-    {id: 19, name: 'Magma'},
-    {id: 20, name: 'Tornado'}
-];
+var heroDetailComponent = require('./hero-detail.component');
+var heroService = require('./hero.services');
 
 var AppComponent =
     ng.core.Component({
         selector: 'my-app',
         templateUrl: 'app/appTmpl.html',
-        directives: [HeroDetailComponent.HeroDetailComponent]
+        directives: [heroDetailComponent.HeroDetailComponent],
+        parameters:[heroService.HeroService]
     })
         .Class({
-            constructor: function () {
+            constructor: [heroService.HeroService,function (heroService) {
                 this.title = "Tour of Heroes";
-                this.heroes = HEROES;
-            },
+                this.heroService = heroService;
+            }],
             onSelect: function (hero) {
                 this.selectedHero = hero;
+            },
+            getHeroes:function () {
+                this.heroes = this.heroService.getHeroes();
+            },
+            ngOnInit: function () {
+                return this.getHeroes();
             }
         });
 
-exports.AppComment = AppComponent;
+exports.AppComponent = AppComponent;
