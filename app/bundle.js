@@ -23,7 +23,9 @@ var AppComponent =
                 this.selectedHero = hero;
             },
             getHeroes:function () {
-                this.heroes = this._heroService.getHeroes();
+
+                var _this = this;
+                this._heroService.getHeroesSlowly().then(function (heroes) { return _this.heroes = heroes; });
             },
             ngOnInit: function () {
                 return this.getHeroes();
@@ -62,14 +64,19 @@ exports.HeroDetailComponent = HeroDetailComponent;
  */
 "use strict";
 
-var HEROES = require('./mock-heros');
+var heroes = require('./mock-heros');
 
 var HeroService = (function () {
     function HeroService(){}
 
     HeroService.prototype =  {
         "getHeroes":function () {
-            return HEROES.HEROES;
+            return Promise.resolve(heroes.HEROES);
+        },
+        getHeroesSlowly: function () {
+            return new Promise(function (resolve) {
+                    return setTimeout(function () { return resolve(heroes.HEROES); }, 2000);
+            }); // 2 seconds
         }
     }
     return HeroService;
