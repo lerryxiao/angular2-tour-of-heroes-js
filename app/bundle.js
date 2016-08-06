@@ -4,8 +4,95 @@
  */
 "use strict";
 
-var HeroDetailComponent = require('./hero-detail.component');
+var heroDetailComponent = require('./hero-detail.component');
+var heroService = require('./hero.services');
 
+var AppComponent =
+    ng.core.Component({
+        selector: 'my-app',
+        templateUrl: 'app/appTmpl.html',
+        directives: [heroDetailComponent.HeroDetailComponent],
+        providers:[ heroService.HeroService ]
+    })
+        .Class({
+            constructor: [heroService.HeroService,function (heroService) {
+                this.title = "Tour of Heroes";
+                this._heroService = heroService;
+            }],
+            onSelect: function (hero) {
+                this.selectedHero = hero;
+            },
+            getHeroes:function () {
+                this.heroes = this._heroService.getHeroes();
+            },
+            ngOnInit: function () {
+                return this.getHeroes();
+            }
+        });
+
+exports.AppComponent = AppComponent;
+
+},{"./hero-detail.component":2,"./hero.services":3}],2:[function(require,module,exports){
+/**
+ * Created by lerry on 8/4/16.
+ */
+"use strict";
+
+
+var HeroDetailComponent =
+    ng.core.Component({
+        selector: "my-hero-detail",
+        inputs: ["hero"],
+        template: '<div *ngIf="hero"> <h2>{{hero.name}} details!</h2> <div><label>id: </label>{{hero.id}}</div> <div> <label>name: </label> <input [(ngModel)]="hero.name" placeholder="name"/> </div> </div>'
+    })
+        .Class({
+            constructor: function () {
+            }
+        });
+
+exports.HeroDetailComponent = HeroDetailComponent;
+
+
+
+
+
+},{}],3:[function(require,module,exports){
+/**
+ * Created by lerry on 8/5/16.
+ */
+"use strict";
+
+var HEROES = require('./mock-heros');
+
+var HeroService = (function () {
+    function HeroService(){}
+
+    HeroService.prototype =  {
+        "getHeroes":function () {
+            return HEROES.HEROES;
+        }
+    }
+    return HeroService;
+})();
+
+exports.HeroService = HeroService;
+
+},{"./mock-heros":5}],4:[function(require,module,exports){
+/**
+ * Created by lerry on 8/3/16.
+ */
+"use strict";
+
+var app_comment = require('./app.component');
+document.addEventListener('DOMContentLoaded', function() {
+    ng.platformBrowserDynamic.bootstrap(app_comment.AppComponent);
+});
+
+},{"./app.component":1}],5:[function(require,module,exports){
+/**
+ * Created by lerry on 8/5/16.
+ */
+"use strict";
 var HEROES = [
     {id: 11, name: 'Mr. Nice'},
     {id: 12, name: 'Narco'},
@@ -19,59 +106,8 @@ var HEROES = [
     {id: 20, name: 'Tornado'}
 ];
 
-var AppComponent =
-    ng.core.Component({
-        selector: 'my-app',
-        templateUrl: 'app/appTmpl.html',
-        directives: [HeroDetailComponent.HeroDetailComponent]
-    })
-        .Class({
-            constructor: function () {
-                this.title = "Tour of Heroes";
-                this.heroes = HEROES;
-            },
-            onSelect: function (hero) {
-                this.selectedHero = hero;
-            }
-        });
-
-exports.AppComment = AppComponent;
-},{"./hero-detail.component":2}],2:[function(require,module,exports){
-/**
- * Created by lerry on 8/4/16.
- */
-"use strict";
-
-
-var HeroDetailComponent =
-    ng.core.Component({
-        selector: "my-hero-detail",
-        inputs:["hero"],
-        template: '<div *ngIf="hero"> <h2>{{hero.name}} details!</h2> <div><label>id: </label>{{hero.id}}</div> <div> <label>name: </label> <input [(ngModel)]="hero.name" placeholder="name"/> </div> </div>'
-    })
-        .Class({
-            constructor: function () {
-            }
-        });
-
-exports.HeroDetailComponent = HeroDetailComponent;
-
-
-
-
-},{}],3:[function(require,module,exports){
-/**
- * Created by lerry on 8/3/16.
- */
-"use strict";
-
-var app_comment = require('./app.component');
-(function(app) {
-    document.addEventListener('DOMContentLoaded', function() {
-        ng.platformBrowserDynamic.bootstrap(app_comment.AppComment);
-    });
-})(window.app || (window.app = {}));
-},{"./app.component":1}]},{},[3,1,2])
+exports.HEROES = HEROES;
+},{}]},{},[4])
 
 
 //# sourceMappingURL=bundle.js.map
