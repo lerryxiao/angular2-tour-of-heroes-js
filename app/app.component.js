@@ -22,7 +22,9 @@ var AppComponent =
                 this.selectedHero = hero;
             },
             getHeroes:function () {
-                this.heroes = this._heroService.getHeroes();
+
+                var _this = this;
+                this._heroService.getHeroesSlowly().then(function (heroes) { return _this.heroes = heroes; });
             },
             ngOnInit: function () {
                 return this.getHeroes();
