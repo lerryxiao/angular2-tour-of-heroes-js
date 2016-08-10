@@ -10,6 +10,18 @@ var buffer = require('vinyl-buffer');
 var sourcemaps = require('gulp-sourcemaps');
 var notify = require('gulp-notify');
 
+var path = {
+    main: './app/main.js',
+    heroDetail: './app/hero-detail.component.js',
+    mockHeroes: './app/mock-hreoes.js',
+    appComponent: './app/app.component.js',
+    heroesComponent: './app/heroes.component.js',
+    hero: './app/Hero.js',
+    heroService: './app/hero.services.js',
+    routes: './app/app.routes.js',
+    dashboardComponent: './app/dashboard.component.js'
+}
+
 // set browserify task
 gulp.task('browserify', function () {
     browserify({
@@ -26,7 +38,16 @@ gulp.task('browserify', function () {
 })
 
 
-gulp.task("default",function () {
-    gulp.watch(['./app/main.js','./app/app.component.js','./app/hero-detail.component.js'], ['browserify']);
+gulp.task("default", ['browserify'], function () {
+    gulp.watch([
+        path.main,
+        path.appComponent,
+        path.heroesComponent,
+        path.hero,
+        path.heroDetail,
+        path.heroService,
+        path.routes,
+        path.dashboardComponent
+    ], ['browserify']);
     console.log("default task");
 })

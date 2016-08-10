@@ -3,7 +3,13 @@
  */
 "use strict";
 
+var platform_browser_dynamic = require('@angular/platform-browser-dynamic');
+
 var app_comment = require('./app.component');
+var appRouterProviders = require('./app.routes');
+
 document.addEventListener('DOMContentLoaded', function() {
-    ng.platformBrowserDynamic.bootstrap(app_comment.AppComponent);
+    platform_browser_dynamic.bootstrap(app_comment.AppComponent,[
+        appRouterProviders.AppRouterProviders
+    ]);
 });

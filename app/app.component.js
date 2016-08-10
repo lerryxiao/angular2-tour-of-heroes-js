@@ -1,34 +1,27 @@
 /**
- * Created by lerry on 8/3/16.
+ * Created by lerry on 8/10/16.
  */
 "use strict";
+var ng_core = require('@angular/core');
+var ng_router =  require('@angular/router');
 
-var heroDetailComponent = require('./hero-detail.component');
 var heroService = require('./hero.services');
 
 var AppComponent =
-    ng.core.Component({
-        selector: 'my-app',
-        templateUrl: 'app/appTmpl.html',
-        directives: [heroDetailComponent.HeroDetailComponent],
-        providers:[ heroService.HeroService ]
-    })
-        .Class({
-            constructor: [heroService.HeroService,function (heroService) {
-                this.title = "Tour of Heroes";
-                this._heroService = heroService;
-            }],
-            onSelect: function (hero) {
-                this.selectedHero = hero;
-            },
-            getHeroes:function () {
-
-                var _this = this;
-                this._heroService.getHeroesSlowly().then(function (heroes) { return _this.heroes = heroes; });
-            },
-            ngOnInit: function () {
-                return this.getHeroes();
-            }
-        });
+    ng_core.Component({
+        selector: "my-app",
+        templateUrl: "./app/app.component.html",
+        styleUrls:['./app/app.component.css'],
+        directives: [ ng_router.ROUTER_DIRECTIVES ],
+        providers: [
+            heroService.HeroService
+        ]
+})
+    .Class({
+        constructor:[heroService.HeroService, function(heroServices) {
+            this.title = "Tour of Heroes";
+            this._heroService = heroServices;
+        }]
+    });
 
 exports.AppComponent = AppComponent;
