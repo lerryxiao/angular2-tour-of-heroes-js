@@ -1,10 +1,24 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 /**
+ * Created by lerry on 8/3/16.
+ */
+"use strict";
+
+var Hero = (function () {
+    function Hero() {
+    }
+    return Hero;
+}());
+exports.Hero = Hero;
+
+},{}],2:[function(require,module,exports){
+/**
  * Created by lerry on 8/10/16.
  */
 "use strict";
 var ng_core = require('@angular/core');
 var ng_router =  require('@angular/router');
+require('./rxjs-extensions');
 
 var heroService = require('./hero.services');
 
@@ -26,7 +40,7 @@ var AppComponent =
     });
 
 exports.AppComponent = AppComponent;
-},{"./hero.services":5,"@angular/core":156,"@angular/router":315}],2:[function(require,module,exports){
+},{"./hero.services":8,"./rxjs-extensions":12,"@angular/core":160,"@angular/router":340}],3:[function(require,module,exports){
 /**
  * Created by lerry on 8/10/16.
  */
@@ -60,7 +74,7 @@ var routes = [
 exports.AppRouterProviders = [
     ng_router.provideRouter(routes)
 ];
-},{"./dashboard.component":3,"./hero-detail.component":4,"./heroes.component":6,"@angular/router":315}],3:[function(require,module,exports){
+},{"./dashboard.component":4,"./hero-detail.component":5,"./heroes.component":9,"@angular/router":340}],4:[function(require,module,exports){
 /**
  * Created by lerry on 8/10/16.
  */
@@ -70,13 +84,15 @@ var ng_core = require('@angular/core');
 var ng_router = require('@angular/router');
 
 var heroServices = require('./hero.services');
+var heroSearchComponent = require('./hero.search.component');
 
 var DashboardComponent =
     ng_core.Component({
         selector: 'my-dashboard',
         templateUrl: './app/dashboard.component.html',
         styleUrls:['./app/dashboard.component.css'],
-        providers:[ heroServices.HeroService ]
+        providers:[ heroServices.HeroService ],
+        directives: [ heroSearchComponent.HeroSearchComponent ]
     })
         .Class({
             constructor:[ng_router.Router, heroServices.HeroService, function (router, heroService) {
@@ -98,7 +114,7 @@ var DashboardComponent =
 
 exports.DashboardComponent = DashboardComponent;
 
-},{"./hero.services":5,"@angular/core":156,"@angular/router":315}],4:[function(require,module,exports){
+},{"./hero.search.component":7,"./hero.services":8,"@angular/core":160,"@angular/router":340}],5:[function(require,module,exports){
 /**
  * Created by lerry on 8/4/16.
  */
@@ -106,11 +122,14 @@ exports.DashboardComponent = DashboardComponent;
 var ng_core = require('@angular/core');
 var ng_router = require('@angular/router');
 var heroService = require('./hero.services');
+var hero = require('./Hero');
+
 
 var HeroDetailComponent =
     ng_core.Component({
         selector: "my-hero-detail",
         inputs: ["hero"],
+        outputs:["close"],
         templateUrl: './app/hero-detail.component.html',
         styleUrls:['./app/hero-detail.component.css']
     })
@@ -118,20 +137,45 @@ var HeroDetailComponent =
             constructor:[ ng_router.ActivatedRoute, heroService.HeroService,function (router, heroService) {
                 this._heroService = heroService;
                 this._router = router;
+                this.close = new ng_core.EventEmitter();
+                this.navigated = false;
             }],
             ngOnInit: function () {
                 var _this = this;
                 this.sub = this._router.params.subscribe(function (params) {
+                    if (params['id'] !== undefined) {
                         var id = +params['id'];
+                        _this.navigated = true;
                         _this._heroService.getHero(id)
                             .then(function (hero) { return _this.hero = hero; });
+                    }
+                    else {
+                        _this.navigated = false;
+                        _this.hero = new hero.Hero();
+                    }
                 });
             },
             ngOnDestory: function () {
                 this.sub.unsubscribe();
             },
-            goBack:function(){
-                window.history.back();
+            goBack:function(savedHero){
+                if (savedHero === void 0) {
+                    savedHero = null;
+                }
+                this.close.emit(savedHero);
+                if (this.navigated) {
+                    window.history.back();
+                }
+            },
+            save:function () {
+                var _this = this;
+                this._heroService
+                    .save(this.hero)
+                    .then(function (hero) {
+                        _this.hero = hero; // saved hero, w/ id if new
+                        _this.goBack(hero);
+                    })
+                    .catch(function (error) { return _this.error = error; }); // TODO: Display error message
             }
         });
 
@@ -141,43 +185,167 @@ exports.HeroDetailComponent = HeroDetailComponent;
 
 
 
-},{"./hero.services":5,"@angular/core":156,"@angular/router":315}],5:[function(require,module,exports){
+},{"./Hero":1,"./hero.services":8,"@angular/core":160,"@angular/router":340}],6:[function(require,module,exports){
+/**
+ * Created by lerry on 8/11/16.
+ */
+"use strict";
+var ng_http = require('@angular/http');
+
+var HeroSearchServcie = (function () {
+    function HeroSearchServcie(http) {
+        this._http = http;
+    }
+
+    HeroSearchServcie.parameters = [ ng_http.Http ];
+
+    HeroSearchServcie.prototype = {
+        search:function(term){
+            return this._http
+                .get("app/heroes/?name=" + term)
+                .map(function (r) { return r.json().data; });
+        }
+    }
+
+    return HeroSearchServcie;
+}());
+
+
+exports.HeroSearchServcie = HeroSearchServcie;
+
+},{"@angular/http":250}],7:[function(require,module,exports){
+/**
+ * Created by lerry on 8/11/16.
+ */
+"use strict";
+
+var ng_core = require('@angular/core');
+var ng_router = require('@angular/router');
+var rxjs_Observable = require('rxjs/Observable');
+var rxjs_Subject = require('rxjs/Subject');
+
+var heroSearchService = require('./hero-search.service');
+
+var HeroSearchComponent = ng_core.Component({
+    selector: 'hero-search',
+    templateUrl: './app/hero.search.component.html',
+    styleUrls: ['./app/hero.search.component.css'],
+    providers: [ heroSearchService.HeroSearchServcie ]
+})
+    .Class({
+        constructor:[ ng_router.Router, heroSearchService.HeroSearchServcie, function (router, heroSearchServie) {
+            this._router = router;
+            this._heroSearchService = heroSearchServie;
+            this.searchTerms = new rxjs_Subject.Subject();
+        }],
+        search:function (term) {
+            this.searchTerms.next(term);
+        },
+        gotoDetail:function (hero) {
+            var link = ['/detail', hero.id];
+            this._router.navigate(link);
+        },
+        ngOnInit:function () {
+            var _this = this;
+            this.heroes = this.searchTerms
+                .debounceTime(300) // wait for 300ms pause in events
+                .distinctUntilChanged() // ignore if next search term is same as previous
+                .switchMap(function (term) { return term // switch to new observable each time
+                    ? _this._heroSearchService.search(term)
+                    : rxjs_Observable.Observable.of([]); })
+                .catch(function (error) {
+                    // TODO: real error handling
+                    console.log(error);
+                    return rxjs_Observable.Observable.of([]);
+                });
+        }
+        
+    });
+
+exports.HeroSearchComponent = HeroSearchComponent;
+},{"./hero-search.service":6,"@angular/core":160,"@angular/router":340,"rxjs/Observable":365,"rxjs/Subject":368}],8:[function(require,module,exports){
 /**
  * Created by lerry on 8/5/16.
  */
 "use strict";
-var heroes = require('./mock-heroes');
+var ng_core = require('@angular/core');
+var ng_http = require('@angular/http');
+require('rxjs/add/operator/toPromise');
 
 var HeroService = (function () {
-    function HeroService() {
+    function HeroService(http) {
+        this.heroesUrl = "/app/heroes";
+        this._http = http;
     }
+
+    HeroService.parameters = [ng_http.Http];
 
     HeroService.prototype = {
         getHeroes: function () {
-            return Promise.resolve(heroes.HEROES);
+            return this._http.get(this.heroesUrl)
+                .toPromise()
+                .then(function (response) {
+                    return response.json().data;
+                })
+                .catch(this.handleError);
         },
-        getHeroesSlowly: function () {
-            return new Promise(function (resolve) {
-                return setTimeout(function () {
-                    return resolve(heroes.HEROES);
-                }, 2000);
-            }); // 2 seconds
-        },
-        getHero:function(id){
+        getHero: function (id) {
             return this.getHeroes().then(function (heroes) {
                 return heroes.find(function (heroes) {
                     return heroes.id === id;
                 });
             });
+        },
+        handleError: function (error) {
+            console.log('An error occurred', error);
+            return Promise.reject(error.message || error);
+        },
+        post: function (hero) {
+            var headers = new ng_http.Headers({
+                'Content-Type': 'application/json'
+            });
+            return this._http
+                .post(this.heroesUrl, JSON.stringify(hero), {headers: headers})
+                .toPromise()
+                .then(function (res) {
+                    return res.json().data;
+                })
+                .catch(this.handleError);
+        },
+        put: function (hero) {
+            var headers = new ng_http.Headers();
+            headers.append('Content-Type', 'application/json');
+            var url = this.heroesUrl + "/" + hero.id;
+            return this._http
+                .put(url, JSON.stringify(hero), {headers: headers})
+                .toPromise()
+                .then(function () {
+                    return hero;
+                })
+                .catch(this.handleError);
+        },
+        delete: function (hero) {
+            var headers = new ng_http.Headers();
+            headers.append('Content-Type', 'application/json');
+            var url = this.heroesUrl + "/" + hero.id;
+            return this._http
+                .delete(url, {headers: headers})
+                .toPromise()
+                .catch(this.handleError);
+        },
+        save: function (hero) {
+            if (hero.id) {
+                return this.put(hero);
+            }
+            return this.post(hero);
         }
-
     }
     return HeroService;
 })();
 
 exports.HeroService = HeroService;
 
-},{"./mock-heroes":8}],6:[function(require,module,exports){
+},{"@angular/core":160,"@angular/http":250,"rxjs/add/operator/toPromise":388}],9:[function(require,module,exports){
 /**
  * Created by lerry on 8/3/16.
  */
@@ -186,73 +354,141 @@ var ng_core = require('@angular/core');
 var ng_router = require('@angular/router');
 
 var heroService = require('./hero.services');
+var heroDetailComponent = require('./hero-detail.component');
 
 var HeroesComponent =
     ng_core.Component({
         selector: 'my-heroes',
         templateUrl: 'app/heroes.component.html',
-        styleUrls: ['app/heroes.component.css']
+        styleUrls: ['app/heroes.component.css'],
+        directives: [heroDetailComponent.HeroDetailComponent],
     })
         .Class({
-            constructor: [ ng_router.Router, heroService.HeroService,function (router,heroService) {
+            constructor: [ng_router.Router, heroService.HeroService, function (router, heroService) {
                 this._router = router;
                 this._heroService = heroService;
             }],
             onSelect: function (hero) {
                 this.selectedHero = hero;
             },
-            getHeroes:function () {
+            getHeroes: function () {
 
                 var _this = this;
-                this._heroService.getHeroes().then(function (heroes) { return _this.heroes = heroes; });
+                this._heroService.getHeroes().then(function (heroes) {
+                    return _this.heroes = heroes;
+                });
             },
             ngOnInit: function () {
                 return this.getHeroes();
             },
-            gotoDetail:function(){
+            gotoDetail: function () {
                 this._router.navigate(['/detail', this.selectedHero.id]);
+            },
+            addHero: function () {
+                this.addingHero = true;
+                this.selectedHero = null;
+            },
+            close: function (savedHero) {
+                this.addingHero = false;
+                if (savedHero) {
+                    this.getHeroes();
+                }
+            },
+            deleteHero: function (hero, event) {
+                var _this = this;
+                event.stopPropagation();
+                this._heroService
+                    .delete(hero)
+                    .then(function (res) {
+                        _this.heroes = _this.heroes.filter(function (h) {
+                            return h !== hero;
+                        });
+                        if (_this.selectedHero === hero) {
+                            _this.selectedHero = null;
+                        }
+                    })
+                    .catch(function (error) {
+                        return _this.error = error;
+                    });
             }
         });
 
 exports.HeroesComponent = HeroesComponent;
 
-},{"./hero.services":5,"@angular/core":156,"@angular/router":315}],7:[function(require,module,exports){
+},{"./hero-detail.component":5,"./hero.services":8,"@angular/core":160,"@angular/router":340}],10:[function(require,module,exports){
+/**
+ * Created by lerry on 8/11/16.
+ */
+"use strict";
+
+var InMemoryDataService = (function () {
+    function InMemoryDataService(){
+
+    }
+
+    InMemoryDataService.prototype = {
+        createDb: function () {
+            var heroes = [
+                {id: 11, name: 'Mr. Nice'},
+                {id: 12, name: 'Narco'},
+                {id: 13, name: 'Bombasto'},
+                {id: 14, name: 'Celeritas'},
+                {id: 15, name: 'Magneta'},
+                {id: 16, name: 'RubberMan'},
+                {id: 17, name: 'Dynama'},
+                {id: 18, name: 'Dr IQ'},
+                {id: 19, name: 'Magma'},
+                {id: 20, name: 'Tornado'}
+            ];
+            return { heroes: heroes };
+        }
+    }
+
+    return InMemoryDataService;
+}());
+
+exports.InMemoryDataService = InMemoryDataService;
+
+},{}],11:[function(require,module,exports){
 /**
  * Created by lerry on 8/3/16.
  */
 "use strict";
 
 var platform_browser_dynamic = require('@angular/platform-browser-dynamic');
+var http = require('@angular/http');
+var angular2_in_memory_web_api = require('angular2-in-memory-web-api');
+var in_memory_data_service = require('./in-memory-data.service');
 
 var app_comment = require('./app.component');
 var appRouterProviders = require('./app.routes');
 
 document.addEventListener('DOMContentLoaded', function() {
     platform_browser_dynamic.bootstrap(app_comment.AppComponent,[
-        appRouterProviders.AppRouterProviders
+        appRouterProviders.AppRouterProviders,
+        http.HTTP_PROVIDERS,
+        { provide: http.XHRBackend, useClass: angular2_in_memory_web_api.InMemoryBackendService },
+        { provide: angular2_in_memory_web_api.SEED_DATA, useClass: in_memory_data_service.InMemoryDataService }
     ]);
 });
 
-},{"./app.component":1,"./app.routes":2,"@angular/platform-browser-dynamic":246}],8:[function(require,module,exports){
+},{"./app.component":2,"./app.routes":3,"./in-memory-data.service":10,"@angular/http":250,"@angular/platform-browser-dynamic":271,"angular2-in-memory-web-api":361}],12:[function(require,module,exports){
 /**
- * Created by lerry on 8/5/16.
+ * Created by lerry on 8/11/16.
  */
 "use strict";
-var HEROES = [
-    {id: 11, name: 'Mr. Nice'},
-    {id: 12, name: 'Narco'},
-    {id: 13, name: 'Bombasto'},
-    {id: 14, name: 'Celeritas'},
-    {id: 15, name: 'Magneta'},
-    {id: 16, name: 'RubberMan'},
-    {id: 17, name: 'Dynama'},
-    {id: 18, name: 'Dr IQ'},
-    {id: 19, name: 'Magma'},
-    {id: 20, name: 'Tornado'}
-];
+require('rxjs/add/observable/of');
+require('rxjs/add/observable/throw');
+// Observable operators
+require('rxjs/add/operator/catch');
+require('rxjs/add/operator/debounceTime');
+require('rxjs/add/operator/distinctUntilChanged');
+require('rxjs/add/operator/do');
+require('rxjs/add/operator/filter');
+require('rxjs/add/operator/map');
+require('rxjs/add/operator/switchMap');
 
-exports.HEROES = HEROES;
-},{}],9:[function(require,module,exports){
+},{"rxjs/add/observable/of":374,"rxjs/add/observable/throw":375,"rxjs/add/operator/catch":376,"rxjs/add/operator/debounceTime":377,"rxjs/add/operator/distinctUntilChanged":379,"rxjs/add/operator/do":380,"rxjs/add/operator/filter":382,"rxjs/add/operator/map":383,"rxjs/add/operator/switchMap":387}],13:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -272,7 +508,7 @@ __export(require('./src/location'));
 var localization_1 = require('./src/localization');
 exports.NgLocalization = localization_1.NgLocalization;
 
-},{"./src/common_directives":10,"./src/directives":11,"./src/forms-deprecated":28,"./src/localization":53,"./src/location":54,"./src/pipes":60}],10:[function(require,module,exports){
+},{"./src/common_directives":14,"./src/directives":15,"./src/forms-deprecated":32,"./src/localization":57,"./src/location":58,"./src/pipes":64}],14:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -330,7 +566,7 @@ var forms_deprecated_1 = require('./forms-deprecated');
  */
 exports.COMMON_DIRECTIVES = [directives_1.CORE_DIRECTIVES, forms_deprecated_1.FORM_DIRECTIVES];
 
-},{"./directives":11,"./forms-deprecated":28}],11:[function(require,module,exports){
+},{"./directives":15,"./forms-deprecated":32}],15:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -364,7 +600,7 @@ exports.NgSwitchDefault = ng_switch_1.NgSwitchDefault;
 var ng_template_outlet_1 = require('./directives/ng_template_outlet');
 exports.NgTemplateOutlet = ng_template_outlet_1.NgTemplateOutlet;
 
-},{"./directives/core_directives":12,"./directives/ng_class":13,"./directives/ng_for":14,"./directives/ng_if":15,"./directives/ng_plural":16,"./directives/ng_style":17,"./directives/ng_switch":18,"./directives/ng_template_outlet":19}],12:[function(require,module,exports){
+},{"./directives/core_directives":16,"./directives/ng_class":17,"./directives/ng_for":18,"./directives/ng_if":19,"./directives/ng_plural":20,"./directives/ng_style":21,"./directives/ng_switch":22,"./directives/ng_template_outlet":23}],16:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -435,7 +671,7 @@ exports.CORE_DIRECTIVES = [
     ng_plural_1.NgPluralCase,
 ];
 
-},{"./ng_class":13,"./ng_for":14,"./ng_if":15,"./ng_plural":16,"./ng_style":17,"./ng_switch":18,"./ng_template_outlet":19}],13:[function(require,module,exports){
+},{"./ng_class":17,"./ng_for":18,"./ng_if":19,"./ng_plural":20,"./ng_style":21,"./ng_switch":22,"./ng_template_outlet":23}],17:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -570,7 +806,7 @@ var NgClass = (function () {
 }());
 exports.NgClass = NgClass;
 
-},{"../facade/collection":22,"../facade/lang":26,"@angular/core":156}],14:[function(require,module,exports){
+},{"../facade/collection":26,"../facade/lang":30,"@angular/core":160}],18:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -740,7 +976,7 @@ var RecordViewTuple = (function () {
     return RecordViewTuple;
 }());
 
-},{"../facade/exceptions":24,"../facade/lang":26,"@angular/core":156}],15:[function(require,module,exports){
+},{"../facade/exceptions":28,"../facade/lang":30,"@angular/core":160}],19:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -784,7 +1020,7 @@ var NgIf = (function () {
 }());
 exports.NgIf = NgIf;
 
-},{"../facade/lang":26,"@angular/core":156}],16:[function(require,module,exports){
+},{"../facade/lang":30,"@angular/core":160}],20:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -871,7 +1107,7 @@ var NgPlural = (function () {
 }());
 exports.NgPlural = NgPlural;
 
-},{"../facade/lang":26,"../localization":53,"./ng_switch":18,"@angular/core":156}],17:[function(require,module,exports){
+},{"../facade/lang":30,"../localization":57,"./ng_switch":22,"@angular/core":160}],21:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -929,7 +1165,7 @@ var NgStyle = (function () {
 }());
 exports.NgStyle = NgStyle;
 
-},{"../facade/lang":26,"@angular/core":156}],18:[function(require,module,exports){
+},{"../facade/lang":30,"@angular/core":160}],22:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -1105,7 +1341,7 @@ var NgSwitchDefault = (function () {
 }());
 exports.NgSwitchDefault = NgSwitchDefault;
 
-},{"../facade/collection":22,"../facade/lang":26,"@angular/core":156}],19:[function(require,module,exports){
+},{"../facade/collection":26,"../facade/lang":30,"@angular/core":160}],23:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -1167,7 +1403,7 @@ var NgTemplateOutlet = (function () {
 }());
 exports.NgTemplateOutlet = NgTemplateOutlet;
 
-},{"../facade/lang":26,"@angular/core":156}],20:[function(require,module,exports){
+},{"../facade/lang":30,"@angular/core":160}],24:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -1335,7 +1571,7 @@ var EventEmitter = (function (_super) {
 }(Subject_1.Subject));
 exports.EventEmitter = EventEmitter;
 
-},{"./lang":26,"./promise":27,"rxjs/Observable":337,"rxjs/Subject":340,"rxjs/observable/PromiseObservable":358,"rxjs/operator/toPromise":370}],21:[function(require,module,exports){
+},{"./lang":30,"./promise":31,"rxjs/Observable":365,"rxjs/Subject":368,"rxjs/observable/PromiseObservable":396,"rxjs/operator/toPromise":416}],25:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -1393,7 +1629,7 @@ var BaseWrappedException = (function (_super) {
 }(Error));
 exports.BaseWrappedException = BaseWrappedException;
 
-},{}],22:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -1769,7 +2005,7 @@ var SetWrapper = (function () {
 }());
 exports.SetWrapper = SetWrapper;
 
-},{"./lang":26}],23:[function(require,module,exports){
+},{"./lang":30}],27:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -1910,7 +2146,7 @@ var ExceptionHandler = (function () {
 }());
 exports.ExceptionHandler = ExceptionHandler;
 
-},{"./base_wrapped_exception":21,"./collection":22,"./lang":26}],24:[function(require,module,exports){
+},{"./base_wrapped_exception":25,"./collection":26,"./lang":30}],28:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -2000,7 +2236,7 @@ function unimplemented() {
 }
 exports.unimplemented = unimplemented;
 
-},{"./base_wrapped_exception":21,"./exception_handler":23}],25:[function(require,module,exports){
+},{"./base_wrapped_exception":25,"./exception_handler":27}],29:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -2190,7 +2426,7 @@ var DateFormatter = (function () {
 }());
 exports.DateFormatter = DateFormatter;
 
-},{}],26:[function(require,module,exports){
+},{}],30:[function(require,module,exports){
 (function (global){
 /**
  * @license
@@ -2659,7 +2895,7 @@ exports.escapeRegExp = escapeRegExp;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 
-},{}],27:[function(require,module,exports){
+},{}],31:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -2715,7 +2951,7 @@ var PromiseWrapper = (function () {
 }());
 exports.PromiseWrapper = PromiseWrapper;
 
-},{}],28:[function(require,module,exports){
+},{}],32:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -2787,7 +3023,7 @@ exports.Validators = validators_2.Validators;
  */
 exports.FORM_PROVIDERS = [form_builder_1.FormBuilder, radio_control_value_accessor_1.RadioControlRegistry];
 
-},{"./forms-deprecated/directives":29,"./forms-deprecated/directives/abstract_control_directive":30,"./forms-deprecated/directives/checkbox_value_accessor":31,"./forms-deprecated/directives/control_container":32,"./forms-deprecated/directives/control_value_accessor":33,"./forms-deprecated/directives/default_value_accessor":34,"./forms-deprecated/directives/ng_control":35,"./forms-deprecated/directives/ng_control_group":36,"./forms-deprecated/directives/ng_control_name":37,"./forms-deprecated/directives/ng_control_status":38,"./forms-deprecated/directives/ng_form":39,"./forms-deprecated/directives/ng_form_control":40,"./forms-deprecated/directives/ng_form_model":41,"./forms-deprecated/directives/ng_model":42,"./forms-deprecated/directives/radio_control_value_accessor":45,"./forms-deprecated/directives/select_control_value_accessor":46,"./forms-deprecated/directives/validators":49,"./forms-deprecated/form_builder":50,"./forms-deprecated/model":51,"./forms-deprecated/validators":52}],29:[function(require,module,exports){
+},{"./forms-deprecated/directives":33,"./forms-deprecated/directives/abstract_control_directive":34,"./forms-deprecated/directives/checkbox_value_accessor":35,"./forms-deprecated/directives/control_container":36,"./forms-deprecated/directives/control_value_accessor":37,"./forms-deprecated/directives/default_value_accessor":38,"./forms-deprecated/directives/ng_control":39,"./forms-deprecated/directives/ng_control_group":40,"./forms-deprecated/directives/ng_control_name":41,"./forms-deprecated/directives/ng_control_status":42,"./forms-deprecated/directives/ng_form":43,"./forms-deprecated/directives/ng_form_control":44,"./forms-deprecated/directives/ng_form_model":45,"./forms-deprecated/directives/ng_model":46,"./forms-deprecated/directives/radio_control_value_accessor":49,"./forms-deprecated/directives/select_control_value_accessor":50,"./forms-deprecated/directives/validators":53,"./forms-deprecated/form_builder":54,"./forms-deprecated/model":55,"./forms-deprecated/validators":56}],33:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -2885,7 +3121,7 @@ exports.FORM_DIRECTIVES = [
     validators_1.PatternValidator,
 ];
 
-},{"./directives/checkbox_value_accessor":31,"./directives/default_value_accessor":34,"./directives/ng_control":35,"./directives/ng_control_group":36,"./directives/ng_control_name":37,"./directives/ng_control_status":38,"./directives/ng_form":39,"./directives/ng_form_control":40,"./directives/ng_form_model":41,"./directives/ng_model":42,"./directives/number_value_accessor":44,"./directives/radio_control_value_accessor":45,"./directives/select_control_value_accessor":46,"./directives/select_multiple_control_value_accessor":47,"./directives/validators":49}],30:[function(require,module,exports){
+},{"./directives/checkbox_value_accessor":35,"./directives/default_value_accessor":38,"./directives/ng_control":39,"./directives/ng_control_group":40,"./directives/ng_control_name":41,"./directives/ng_control_status":42,"./directives/ng_form":43,"./directives/ng_form_control":44,"./directives/ng_form_model":45,"./directives/ng_model":46,"./directives/number_value_accessor":48,"./directives/radio_control_value_accessor":49,"./directives/select_control_value_accessor":50,"./directives/select_multiple_control_value_accessor":51,"./directives/validators":53}],34:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -2957,7 +3193,7 @@ var AbstractControlDirective = (function () {
 }());
 exports.AbstractControlDirective = AbstractControlDirective;
 
-},{"../../facade/exceptions":24,"../../facade/lang":26}],31:[function(require,module,exports){
+},{"../../facade/exceptions":28,"../../facade/lang":30}],35:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3002,7 +3238,7 @@ var CheckboxControlValueAccessor = (function () {
 }());
 exports.CheckboxControlValueAccessor = CheckboxControlValueAccessor;
 
-},{"./control_value_accessor":33,"@angular/core":156}],32:[function(require,module,exports){
+},{"./control_value_accessor":37,"@angular/core":160}],36:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3049,7 +3285,7 @@ var ControlContainer = (function (_super) {
 }(abstract_control_directive_1.AbstractControlDirective));
 exports.ControlContainer = ControlContainer;
 
-},{"./abstract_control_directive":30}],33:[function(require,module,exports){
+},{"./abstract_control_directive":34}],37:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3068,7 +3304,7 @@ var core_1 = require('@angular/core');
 exports.NG_VALUE_ACCESSOR = 
 /*@ts2dart_const*/ new core_1.OpaqueToken('NgValueAccessor');
 
-},{"@angular/core":156}],34:[function(require,module,exports){
+},{"@angular/core":160}],38:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3119,7 +3355,7 @@ var DefaultValueAccessor = (function () {
 }());
 exports.DefaultValueAccessor = DefaultValueAccessor;
 
-},{"../../facade/lang":26,"./control_value_accessor":33,"@angular/core":156}],35:[function(require,module,exports){
+},{"../../facade/lang":30,"./control_value_accessor":37,"@angular/core":160}],39:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3164,7 +3400,7 @@ var NgControl = (function (_super) {
 }(abstract_control_directive_1.AbstractControlDirective));
 exports.NgControl = NgControl;
 
-},{"../../facade/exceptions":24,"./abstract_control_directive":30}],36:[function(require,module,exports){
+},{"../../facade/exceptions":28,"./abstract_control_directive":34}],40:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3250,7 +3486,7 @@ var NgControlGroup = (function (_super) {
 }(control_container_1.ControlContainer));
 exports.NgControlGroup = NgControlGroup;
 
-},{"../validators":52,"./control_container":32,"./shared":48,"@angular/core":156}],37:[function(require,module,exports){
+},{"../validators":56,"./control_container":36,"./shared":52,"@angular/core":160}],41:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3351,7 +3587,7 @@ var NgControlName = (function (_super) {
 }(ng_control_1.NgControl));
 exports.NgControlName = NgControlName;
 
-},{"../../facade/async":20,"../validators":52,"./control_container":32,"./control_value_accessor":33,"./ng_control":35,"./shared":48,"@angular/core":156}],38:[function(require,module,exports){
+},{"../../facade/async":24,"../validators":56,"./control_container":36,"./control_value_accessor":37,"./ng_control":39,"./shared":52,"@angular/core":160}],42:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3431,7 +3667,7 @@ var NgControlStatus = (function () {
 }());
 exports.NgControlStatus = NgControlStatus;
 
-},{"../../facade/lang":26,"./ng_control":35,"@angular/core":156}],39:[function(require,module,exports){
+},{"../../facade/lang":30,"./ng_control":39,"@angular/core":160}],43:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3577,7 +3813,7 @@ var NgForm = (function (_super) {
 }(control_container_1.ControlContainer));
 exports.NgForm = NgForm;
 
-},{"../../facade/async":20,"../../facade/collection":22,"../../facade/lang":26,"../model":51,"../validators":52,"./control_container":32,"./shared":48,"@angular/core":156}],40:[function(require,module,exports){
+},{"../../facade/async":24,"../../facade/collection":26,"../../facade/lang":30,"../model":55,"../validators":56,"./control_container":36,"./shared":52,"@angular/core":160}],44:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3671,7 +3907,7 @@ var NgFormControl = (function (_super) {
 }(ng_control_1.NgControl));
 exports.NgFormControl = NgFormControl;
 
-},{"../../facade/async":20,"../../facade/collection":22,"../validators":52,"./control_value_accessor":33,"./ng_control":35,"./shared":48,"@angular/core":156}],41:[function(require,module,exports){
+},{"../../facade/async":24,"../../facade/collection":26,"../validators":56,"./control_value_accessor":37,"./ng_control":39,"./shared":52,"@angular/core":160}],45:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3808,7 +4044,7 @@ var NgFormModel = (function (_super) {
 }(control_container_1.ControlContainer));
 exports.NgFormModel = NgFormModel;
 
-},{"../../facade/async":20,"../../facade/collection":22,"../../facade/exceptions":24,"../../facade/lang":26,"../validators":52,"./control_container":32,"./shared":48,"@angular/core":156}],42:[function(require,module,exports){
+},{"../../facade/async":24,"../../facade/collection":26,"../../facade/exceptions":28,"../../facade/lang":30,"../validators":56,"./control_container":36,"./shared":52,"@angular/core":160}],46:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3904,7 +4140,7 @@ var NgModel = (function (_super) {
 }(ng_control_1.NgControl));
 exports.NgModel = NgModel;
 
-},{"../../facade/async":20,"../model":51,"../validators":52,"./control_value_accessor":33,"./ng_control":35,"./shared":48,"@angular/core":156}],43:[function(require,module,exports){
+},{"../../facade/async":24,"../model":55,"../validators":56,"./control_value_accessor":37,"./ng_control":39,"./shared":52,"@angular/core":160}],47:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3932,7 +4168,7 @@ function normalizeAsyncValidator(validator) {
 }
 exports.normalizeAsyncValidator = normalizeAsyncValidator;
 
-},{}],44:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -3984,7 +4220,7 @@ var NumberValueAccessor = (function () {
 }());
 exports.NumberValueAccessor = NumberValueAccessor;
 
-},{"../../facade/lang":26,"./control_value_accessor":33,"@angular/core":156}],45:[function(require,module,exports){
+},{"../../facade/lang":30,"./control_value_accessor":37,"@angular/core":160}],49:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -4104,7 +4340,7 @@ var RadioControlValueAccessor = (function () {
 }());
 exports.RadioControlValueAccessor = RadioControlValueAccessor;
 
-},{"../../facade/collection":22,"../../facade/lang":26,"./control_value_accessor":33,"./ng_control":35,"@angular/core":156}],46:[function(require,module,exports){
+},{"../../facade/collection":26,"../../facade/lang":30,"./control_value_accessor":37,"./ng_control":39,"@angular/core":160}],50:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -4245,7 +4481,7 @@ var NgSelectOption = (function () {
 }());
 exports.NgSelectOption = NgSelectOption;
 
-},{"../../facade/collection":22,"../../facade/lang":26,"./control_value_accessor":33,"@angular/core":156}],47:[function(require,module,exports){
+},{"../../facade/collection":26,"../../facade/lang":30,"./control_value_accessor":37,"@angular/core":160}],51:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -4427,7 +4663,7 @@ var NgSelectMultipleOption = (function () {
 exports.NgSelectMultipleOption = NgSelectMultipleOption;
 exports.SELECT_DIRECTIVES = [SelectMultipleControlValueAccessor, NgSelectMultipleOption];
 
-},{"../../facade/collection":22,"../../facade/lang":26,"./control_value_accessor":33,"@angular/core":156}],48:[function(require,module,exports){
+},{"../../facade/collection":26,"../../facade/lang":30,"./control_value_accessor":37,"@angular/core":160}],52:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -4538,7 +4774,7 @@ function selectValueAccessor(dir, valueAccessors) {
 }
 exports.selectValueAccessor = selectValueAccessor;
 
-},{"../../facade/collection":22,"../../facade/exceptions":24,"../../facade/lang":26,"../validators":52,"./checkbox_value_accessor":31,"./default_value_accessor":34,"./normalize_validator":43,"./number_value_accessor":44,"./radio_control_value_accessor":45,"./select_control_value_accessor":46,"./select_multiple_control_value_accessor":47}],49:[function(require,module,exports){
+},{"../../facade/collection":26,"../../facade/exceptions":28,"../../facade/lang":30,"../validators":56,"./checkbox_value_accessor":35,"./default_value_accessor":38,"./normalize_validator":47,"./number_value_accessor":48,"./radio_control_value_accessor":49,"./select_control_value_accessor":50,"./select_multiple_control_value_accessor":51}],53:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -4656,7 +4892,7 @@ var PatternValidator = (function () {
 }());
 exports.PatternValidator = PatternValidator;
 
-},{"../../facade/lang":26,"../validators":52,"@angular/core":156}],50:[function(require,module,exports){
+},{"../../facade/lang":30,"../validators":56,"@angular/core":160}],54:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -4738,7 +4974,7 @@ var FormBuilder = (function () {
 }());
 exports.FormBuilder = FormBuilder;
 
-},{"../facade/collection":22,"../facade/lang":26,"./model":51,"@angular/core":156}],51:[function(require,module,exports){
+},{"../facade/collection":26,"../facade/lang":30,"./model":55,"@angular/core":160}],55:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -5264,7 +5500,7 @@ var ControlArray = (function (_super) {
 }(AbstractControl));
 exports.ControlArray = ControlArray;
 
-},{"../facade/async":20,"../facade/collection":22,"../facade/lang":26}],52:[function(require,module,exports){
+},{"../facade/async":24,"../facade/collection":26,"../facade/lang":30}],56:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -5413,7 +5649,7 @@ function _mergeErrors(arrayOfErrors) {
     return collection_1.StringMapWrapper.isEmpty(res) ? null : res;
 }
 
-},{"../facade/async":20,"../facade/collection":22,"../facade/lang":26,"../facade/promise":27,"@angular/core":156}],53:[function(require,module,exports){
+},{"../facade/async":24,"../facade/collection":26,"../facade/lang":30,"../facade/promise":31,"@angular/core":160}],57:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -5444,7 +5680,7 @@ function getPluralCategory(value, cases, ngLocalization) {
 }
 exports.getPluralCategory = getPluralCategory;
 
-},{}],54:[function(require,module,exports){
+},{}],58:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -5462,7 +5698,7 @@ __export(require('./location/hash_location_strategy'));
 __export(require('./location/path_location_strategy'));
 __export(require('./location/location'));
 
-},{"./location/hash_location_strategy":55,"./location/location":56,"./location/location_strategy":57,"./location/path_location_strategy":58,"./location/platform_location":59}],55:[function(require,module,exports){
+},{"./location/hash_location_strategy":59,"./location/location":60,"./location/location_strategy":61,"./location/path_location_strategy":62,"./location/platform_location":63}],59:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -5541,7 +5777,7 @@ var HashLocationStrategy = (function (_super) {
 }(location_strategy_1.LocationStrategy));
 exports.HashLocationStrategy = HashLocationStrategy;
 
-},{"../facade/lang":26,"./location":56,"./location_strategy":57,"./platform_location":59,"@angular/core":156}],56:[function(require,module,exports){
+},{"../facade/lang":30,"./location":60,"./location_strategy":61,"./platform_location":63,"@angular/core":160}],60:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -5699,7 +5935,7 @@ function _stripIndexHtml(url) {
     return url;
 }
 
-},{"../facade/async":20,"./location_strategy":57,"@angular/core":156}],57:[function(require,module,exports){
+},{"../facade/async":24,"./location_strategy":61,"@angular/core":160}],61:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -5765,7 +6001,7 @@ exports.LocationStrategy = LocationStrategy;
  */
 exports.APP_BASE_HREF = new core_1.OpaqueToken('appBaseHref');
 
-},{"@angular/core":156}],58:[function(require,module,exports){
+},{"@angular/core":160}],62:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -5836,7 +6072,7 @@ var PathLocationStrategy = (function (_super) {
 }(location_strategy_1.LocationStrategy));
 exports.PathLocationStrategy = PathLocationStrategy;
 
-},{"../facade/exceptions":24,"../facade/lang":26,"./location":56,"./location_strategy":57,"./platform_location":59,"@angular/core":156}],59:[function(require,module,exports){
+},{"../facade/exceptions":28,"../facade/lang":30,"./location":60,"./location_strategy":61,"./platform_location":63,"@angular/core":160}],63:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -5893,7 +6129,7 @@ var PlatformLocation = (function () {
 }());
 exports.PlatformLocation = PlatformLocation;
 
-},{}],60:[function(require,module,exports){
+},{}],64:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -5932,7 +6168,7 @@ exports.SlicePipe = slice_pipe_1.SlicePipe;
 var uppercase_pipe_1 = require('./pipes/uppercase_pipe');
 exports.UpperCasePipe = uppercase_pipe_1.UpperCasePipe;
 
-},{"./pipes/async_pipe":61,"./pipes/common_pipes":62,"./pipes/date_pipe":63,"./pipes/i18n_plural_pipe":64,"./pipes/i18n_select_pipe":65,"./pipes/json_pipe":67,"./pipes/lowercase_pipe":68,"./pipes/number_pipe":69,"./pipes/replace_pipe":70,"./pipes/slice_pipe":71,"./pipes/uppercase_pipe":72}],61:[function(require,module,exports){
+},{"./pipes/async_pipe":65,"./pipes/common_pipes":66,"./pipes/date_pipe":67,"./pipes/i18n_plural_pipe":68,"./pipes/i18n_select_pipe":69,"./pipes/json_pipe":71,"./pipes/lowercase_pipe":72,"./pipes/number_pipe":73,"./pipes/replace_pipe":74,"./pipes/slice_pipe":75,"./pipes/uppercase_pipe":76}],65:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6052,7 +6288,7 @@ var AsyncPipe = (function () {
 }());
 exports.AsyncPipe = AsyncPipe;
 
-},{"../facade/async":20,"../facade/lang":26,"./invalid_pipe_argument_exception":66,"@angular/core":156}],62:[function(require,module,exports){
+},{"../facade/async":24,"../facade/lang":30,"./invalid_pipe_argument_exception":70,"@angular/core":160}],66:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6100,7 +6336,7 @@ exports.COMMON_PIPES = [
     i18n_select_pipe_1.I18nSelectPipe,
 ];
 
-},{"./async_pipe":61,"./date_pipe":63,"./i18n_plural_pipe":64,"./i18n_select_pipe":65,"./json_pipe":67,"./lowercase_pipe":68,"./number_pipe":69,"./replace_pipe":70,"./slice_pipe":71,"./uppercase_pipe":72}],63:[function(require,module,exports){
+},{"./async_pipe":65,"./date_pipe":67,"./i18n_plural_pipe":68,"./i18n_select_pipe":69,"./json_pipe":71,"./lowercase_pipe":72,"./number_pipe":73,"./replace_pipe":74,"./slice_pipe":75,"./uppercase_pipe":76}],67:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6165,7 +6401,7 @@ var DatePipe = (function () {
 }());
 exports.DatePipe = DatePipe;
 
-},{"../facade/collection":22,"../facade/intl":25,"../facade/lang":26,"./invalid_pipe_argument_exception":66,"@angular/core":156}],64:[function(require,module,exports){
+},{"../facade/collection":26,"../facade/intl":29,"../facade/lang":30,"./invalid_pipe_argument_exception":70,"@angular/core":160}],68:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6204,7 +6440,7 @@ var I18nPluralPipe = (function () {
 }());
 exports.I18nPluralPipe = I18nPluralPipe;
 
-},{"../facade/lang":26,"../localization":53,"./invalid_pipe_argument_exception":66,"@angular/core":156}],65:[function(require,module,exports){
+},{"../facade/lang":30,"../localization":57,"./invalid_pipe_argument_exception":70,"@angular/core":160}],69:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6235,7 +6471,7 @@ var I18nSelectPipe = (function () {
 }());
 exports.I18nSelectPipe = I18nSelectPipe;
 
-},{"../facade/lang":26,"./invalid_pipe_argument_exception":66,"@angular/core":156}],66:[function(require,module,exports){
+},{"../facade/lang":30,"./invalid_pipe_argument_exception":70,"@angular/core":160}],70:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6260,7 +6496,7 @@ var InvalidPipeArgumentException = (function (_super) {
 }(exceptions_1.BaseException));
 exports.InvalidPipeArgumentException = InvalidPipeArgumentException;
 
-},{"../facade/exceptions":24,"../facade/lang":26}],67:[function(require,module,exports){
+},{"../facade/exceptions":28,"../facade/lang":30}],71:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6283,7 +6519,7 @@ var JsonPipe = (function () {
 }());
 exports.JsonPipe = JsonPipe;
 
-},{"../facade/lang":26,"@angular/core":156}],68:[function(require,module,exports){
+},{"../facade/lang":30,"@angular/core":160}],72:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6314,7 +6550,7 @@ var LowerCasePipe = (function () {
 }());
 exports.LowerCasePipe = LowerCasePipe;
 
-},{"../facade/lang":26,"./invalid_pipe_argument_exception":66,"@angular/core":156}],69:[function(require,module,exports){
+},{"../facade/lang":30,"./invalid_pipe_argument_exception":70,"@angular/core":160}],73:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6410,7 +6646,7 @@ var CurrencyPipe = (function () {
 }());
 exports.CurrencyPipe = CurrencyPipe;
 
-},{"../facade/exceptions":24,"../facade/intl":25,"../facade/lang":26,"./invalid_pipe_argument_exception":66,"@angular/core":156}],70:[function(require,module,exports){
+},{"../facade/exceptions":28,"../facade/intl":29,"../facade/lang":30,"./invalid_pipe_argument_exception":70,"@angular/core":160}],74:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6464,7 +6700,7 @@ var ReplacePipe = (function () {
 }());
 exports.ReplacePipe = ReplacePipe;
 
-},{"../facade/lang":26,"./invalid_pipe_argument_exception":66,"@angular/core":156}],71:[function(require,module,exports){
+},{"../facade/lang":30,"./invalid_pipe_argument_exception":70,"@angular/core":160}],75:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6501,7 +6737,7 @@ var SlicePipe = (function () {
 }());
 exports.SlicePipe = SlicePipe;
 
-},{"../facade/collection":22,"../facade/lang":26,"./invalid_pipe_argument_exception":66,"@angular/core":156}],72:[function(require,module,exports){
+},{"../facade/collection":26,"../facade/lang":30,"./invalid_pipe_argument_exception":70,"@angular/core":160}],76:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6532,7 +6768,7 @@ var UpperCasePipe = (function () {
 }());
 exports.UpperCasePipe = UpperCasePipe;
 
-},{"../facade/lang":26,"./invalid_pipe_argument_exception":66,"@angular/core":156}],73:[function(require,module,exports){
+},{"../facade/lang":30,"./invalid_pipe_argument_exception":70,"@angular/core":160}],77:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6582,7 +6818,7 @@ exports.ElementSchemaRegistry = element_schema_registry_1.ElementSchemaRegistry;
 __export(require('./src/template_ast'));
 __export(require('./private_export'));
 
-},{"./private_export":76,"./src/compiler":84,"./src/schema/element_schema_registry":129,"./src/template_ast":134}],74:[function(require,module,exports){
+},{"./private_export":80,"./src/compiler":88,"./src/schema/element_schema_registry":133,"./src/template_ast":138}],78:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6656,7 +6892,7 @@ exports.clearStyles = core_1.__core_private__.clearStyles;
 exports.collectAndResolveStyles = core_1.__core_private__.collectAndResolveStyles;
 exports.renderStyles = core_1.__core_private__.renderStyles;
 
-},{"@angular/core":156}],75:[function(require,module,exports){
+},{"@angular/core":160}],79:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6670,7 +6906,7 @@ function __export(m) {
 }
 __export(require('./compiler'));
 
-},{"./compiler":73}],76:[function(require,module,exports){
+},{"./compiler":77}],80:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6726,7 +6962,7 @@ var __compiler_private__;
     __compiler_private__.TypeScriptEmitter = ts_emitter.TypeScriptEmitter;
 })(__compiler_private__ = exports.__compiler_private__ || (exports.__compiler_private__ = {}));
 
-},{"./src/directive_normalizer":87,"./src/expression_parser/lexer":90,"./src/expression_parser/parser":91,"./src/html_parser":102,"./src/i18n/i18n_html_parser":105,"./src/i18n/message":106,"./src/i18n/message_extractor":107,"./src/i18n/xmb_serializer":109,"./src/metadata_resolver":112,"./src/output/path_util":121,"./src/output/ts_emitter":122,"./src/parse_util":123,"./src/schema/dom_element_schema_registry":127,"./src/selector":130,"./src/style_compiler":132,"./src/template_parser":135,"./src/view_compiler/view_compiler":153}],77:[function(require,module,exports){
+},{"./src/directive_normalizer":91,"./src/expression_parser/lexer":94,"./src/expression_parser/parser":95,"./src/html_parser":106,"./src/i18n/i18n_html_parser":109,"./src/i18n/message":110,"./src/i18n/message_extractor":111,"./src/i18n/xmb_serializer":113,"./src/metadata_resolver":116,"./src/output/path_util":125,"./src/output/ts_emitter":126,"./src/parse_util":127,"./src/schema/dom_element_schema_registry":131,"./src/selector":134,"./src/style_compiler":136,"./src/template_parser":139,"./src/view_compiler/view_compiler":157}],81:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -6877,7 +7113,7 @@ var AnimationSequenceAst = (function (_super) {
 }(AnimationWithStepsAst));
 exports.AnimationSequenceAst = AnimationSequenceAst;
 
-},{}],78:[function(require,module,exports){
+},{}],82:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -7171,7 +7407,7 @@ function _getStylesArray(obj) {
     return obj.styles.styles;
 }
 
-},{"../../core_private":74,"../facade/collection":94,"../facade/exceptions":96,"../facade/lang":97,"../identifiers":110,"../output/output_ast":118,"./animation_ast":77,"./animation_parser":79}],79:[function(require,module,exports){
+},{"../../core_private":78,"../facade/collection":98,"../facade/exceptions":100,"../facade/lang":101,"../identifiers":114,"../output/output_ast":122,"./animation_ast":81,"./animation_parser":83}],83:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -7647,7 +7883,7 @@ function _createStartKeyframeFromEndKeyframe(endKeyframe, startTime, duration, c
     return new animation_ast_1.AnimationKeyframeAst(_INITIAL_KEYFRAME, new animation_ast_1.AnimationStylesAst([values]));
 }
 
-},{"../../core_private":74,"../compile_metadata":83,"../facade/collection":94,"../facade/lang":97,"../facade/math":98,"../parse_util":123,"./animation_ast":77,"./styles_collection":80}],80:[function(require,module,exports){
+},{"../../core_private":78,"../compile_metadata":87,"../facade/collection":98,"../facade/lang":101,"../facade/math":102,"../parse_util":127,"./animation_ast":81,"./styles_collection":84}],84:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -7711,7 +7947,7 @@ var StylesCollection = (function () {
 }());
 exports.StylesCollection = StylesCollection;
 
-},{"../facade/collection":94,"../facade/lang":97}],81:[function(require,module,exports){
+},{"../facade/collection":98,"../facade/lang":101}],85:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -7760,7 +7996,7 @@ function assertInterpolationSymbols(identifier, value) {
 }
 exports.assertInterpolationSymbols = assertInterpolationSymbols;
 
-},{"../src/facade/exceptions":96,"../src/facade/lang":97,"@angular/core":156}],82:[function(require,module,exports){
+},{"../src/facade/exceptions":100,"../src/facade/lang":101,"@angular/core":160}],86:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -7844,7 +8080,7 @@ function isAsciiHexDigit(code) {
 }
 exports.isAsciiHexDigit = isAsciiHexDigit;
 
-},{}],83:[function(require,module,exports){
+},{}],87:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -8741,7 +8977,7 @@ function _normalizeArray(obj) {
     return lang_1.isPresent(obj) ? obj : [];
 }
 
-},{"../core_private":74,"../src/facade/collection":94,"../src/facade/exceptions":96,"../src/facade/lang":97,"./selector":130,"./url_resolver":137,"./util":138,"@angular/core":156}],84:[function(require,module,exports){
+},{"../core_private":78,"../src/facade/collection":98,"../src/facade/exceptions":100,"../src/facade/lang":101,"./selector":134,"./url_resolver":141,"./util":142,"@angular/core":160}],88:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -8805,7 +9041,7 @@ exports.COMPILER_PROVIDERS =
     url_resolver_2.UrlResolver, view_resolver_2.ViewResolver, directive_resolver_2.DirectiveResolver, pipe_resolver_2.PipeResolver
 ];
 
-},{"./compile_metadata":83,"./config":85,"./directive_normalizer":87,"./directive_resolver":88,"./expression_parser/lexer":90,"./expression_parser/parser":91,"./html_parser":102,"./metadata_resolver":112,"./offline_compiler":113,"./pipe_resolver":124,"./runtime_compiler":126,"./schema/dom_element_schema_registry":127,"./schema/element_schema_registry":129,"./style_compiler":132,"./template_ast":134,"./template_parser":135,"./url_resolver":137,"./view_compiler/view_compiler":153,"./view_resolver":154,"./xhr":155,"@angular/core":156}],85:[function(require,module,exports){
+},{"./compile_metadata":87,"./config":89,"./directive_normalizer":91,"./directive_resolver":92,"./expression_parser/lexer":94,"./expression_parser/parser":95,"./html_parser":106,"./metadata_resolver":116,"./offline_compiler":117,"./pipe_resolver":128,"./runtime_compiler":130,"./schema/dom_element_schema_registry":131,"./schema/element_schema_registry":133,"./style_compiler":136,"./template_ast":138,"./template_parser":139,"./url_resolver":141,"./view_compiler/view_compiler":157,"./view_resolver":158,"./xhr":159,"@angular/core":160}],89:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -8899,7 +9135,7 @@ var DefaultRenderTypes = (function () {
 }());
 exports.DefaultRenderTypes = DefaultRenderTypes;
 
-},{"../src/facade/exceptions":96,"./identifiers":110,"@angular/core":156}],86:[function(require,module,exports){
+},{"../src/facade/exceptions":100,"./identifiers":114,"@angular/core":160}],90:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -8938,7 +9174,7 @@ function hasLifecycleHook(hook, token) {
 }
 exports.hasLifecycleHook = hasLifecycleHook;
 
-},{"../core_private":74,"../src/facade/collection":94,"@angular/core":156}],87:[function(require,module,exports){
+},{"../core_private":78,"../src/facade/collection":98,"@angular/core":160}],91:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -9190,7 +9426,7 @@ function _cloneDirectiveWithTemplate(directive, template) {
     });
 }
 
-},{"../src/facade/collection":94,"../src/facade/exceptions":96,"../src/facade/lang":97,"./compile_metadata":83,"./config":85,"./html_ast":100,"./html_parser":102,"./style_url_resolver":133,"./template_preparser":136,"./url_resolver":137,"./xhr":155,"@angular/core":156}],88:[function(require,module,exports){
+},{"../src/facade/collection":98,"../src/facade/exceptions":100,"../src/facade/lang":101,"./compile_metadata":87,"./config":89,"./html_ast":104,"./html_parser":106,"./style_url_resolver":137,"./template_preparser":140,"./url_resolver":141,"./xhr":159,"@angular/core":160}],92:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -9324,7 +9560,7 @@ var DirectiveResolver = (function () {
 exports.DirectiveResolver = DirectiveResolver;
 exports.CODEGEN_DIRECTIVE_RESOLVER = new DirectiveResolver(core_private_1.reflector);
 
-},{"../core_private":74,"../src/facade/collection":94,"../src/facade/exceptions":96,"../src/facade/lang":97,"@angular/core":156}],89:[function(require,module,exports){
+},{"../core_private":78,"../src/facade/collection":98,"../src/facade/exceptions":100,"../src/facade/lang":101,"@angular/core":160}],93:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -9819,7 +10055,7 @@ var AstTransformer = (function () {
 }());
 exports.AstTransformer = AstTransformer;
 
-},{"../facade/collection":94}],90:[function(require,module,exports){
+},{"../facade/collection":98}],94:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -10199,7 +10435,7 @@ function unescape(code) {
     }
 }
 
-},{"../chars":82,"../facade/exceptions":96,"../facade/lang":97,"@angular/core":156}],91:[function(require,module,exports){
+},{"../chars":86,"../facade/exceptions":100,"../facade/lang":101,"@angular/core":160}],95:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -10879,17 +11115,17 @@ var SimpleExpressionChecker = (function () {
     return SimpleExpressionChecker;
 }());
 
-},{"../chars":82,"../facade/collection":94,"../facade/exceptions":96,"../facade/lang":97,"../interpolation_config":111,"./ast":89,"./lexer":90,"@angular/core":156}],92:[function(require,module,exports){
-arguments[4][20][0].apply(exports,arguments)
-},{"./lang":97,"./promise":99,"dup":20,"rxjs/Observable":337,"rxjs/Subject":340,"rxjs/observable/PromiseObservable":358,"rxjs/operator/toPromise":370}],93:[function(require,module,exports){
-arguments[4][21][0].apply(exports,arguments)
-},{"dup":21}],94:[function(require,module,exports){
-arguments[4][22][0].apply(exports,arguments)
-},{"./lang":97,"dup":22}],95:[function(require,module,exports){
-arguments[4][23][0].apply(exports,arguments)
-},{"./base_wrapped_exception":93,"./collection":94,"./lang":97,"dup":23}],96:[function(require,module,exports){
+},{"../chars":86,"../facade/collection":98,"../facade/exceptions":100,"../facade/lang":101,"../interpolation_config":115,"./ast":93,"./lexer":94,"@angular/core":160}],96:[function(require,module,exports){
 arguments[4][24][0].apply(exports,arguments)
-},{"./base_wrapped_exception":93,"./exception_handler":95,"dup":24}],97:[function(require,module,exports){
+},{"./lang":101,"./promise":103,"dup":24,"rxjs/Observable":365,"rxjs/Subject":368,"rxjs/observable/PromiseObservable":396,"rxjs/operator/toPromise":416}],97:[function(require,module,exports){
+arguments[4][25][0].apply(exports,arguments)
+},{"dup":25}],98:[function(require,module,exports){
+arguments[4][26][0].apply(exports,arguments)
+},{"./lang":101,"dup":26}],99:[function(require,module,exports){
+arguments[4][27][0].apply(exports,arguments)
+},{"./base_wrapped_exception":97,"./collection":98,"./lang":101,"dup":27}],100:[function(require,module,exports){
+arguments[4][28][0].apply(exports,arguments)
+},{"./base_wrapped_exception":97,"./exception_handler":99,"dup":28}],101:[function(require,module,exports){
 (function (global){
 /**
  * @license
@@ -11358,7 +11594,7 @@ exports.escapeRegExp = escapeRegExp;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 
-},{}],98:[function(require,module,exports){
+},{}],102:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -11371,9 +11607,9 @@ var lang_1 = require('./lang');
 exports.Math = lang_1.global.Math;
 exports.NaN = typeof exports.NaN;
 
-},{"./lang":97}],99:[function(require,module,exports){
-arguments[4][27][0].apply(exports,arguments)
-},{"dup":27}],100:[function(require,module,exports){
+},{"./lang":101}],103:[function(require,module,exports){
+arguments[4][31][0].apply(exports,arguments)
+},{"dup":31}],104:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -11465,7 +11701,7 @@ function htmlVisitAll(visitor, asts, context) {
 }
 exports.htmlVisitAll = htmlVisitAll;
 
-},{"../src/facade/lang":97}],101:[function(require,module,exports){
+},{"../src/facade/lang":101}],105:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -12126,7 +12362,7 @@ function mergeTextTokens(srcTokens) {
     return dstTokens;
 }
 
-},{"./chars":82,"./facade/lang":97,"./html_tags":103,"./interpolation_config":111,"./parse_util":123}],102:[function(require,module,exports){
+},{"./chars":86,"./facade/lang":101,"./html_tags":107,"./interpolation_config":115,"./parse_util":127}],106:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -12498,7 +12734,7 @@ function lastOnStack(stack, element) {
     return stack.length > 0 && stack[stack.length - 1] === element;
 }
 
-},{"../src/facade/collection":94,"../src/facade/lang":97,"./html_ast":100,"./html_lexer":101,"./html_tags":103,"./parse_util":123,"@angular/core":156}],103:[function(require,module,exports){
+},{"../src/facade/collection":98,"../src/facade/lang":101,"./html_ast":104,"./html_lexer":105,"./html_tags":107,"./parse_util":127,"@angular/core":160}],107:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -12885,7 +13121,7 @@ function mergeNsAndName(prefix, localName) {
 }
 exports.mergeNsAndName = mergeNsAndName;
 
-},{"../src/facade/lang":97}],104:[function(require,module,exports){
+},{"../src/facade/lang":101}],108:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -12984,7 +13220,7 @@ function _expandDefaultForm(ast, errors) {
     return new html_ast_1.HtmlElementAst('ng-container', [switchAttr], children, ast.sourceSpan, ast.sourceSpan, ast.sourceSpan);
 }
 
-},{"../facade/exceptions":96,"../html_ast":100,"./shared":108}],105:[function(require,module,exports){
+},{"../facade/exceptions":100,"../html_ast":104,"./shared":112}],109:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -13264,7 +13500,7 @@ var _CreateNodeMapping = (function () {
     return _CreateNodeMapping;
 }());
 
-},{"../facade/collection":94,"../facade/exceptions":96,"../facade/lang":97,"../html_ast":100,"../html_parser":102,"../interpolation_config":111,"./expander":104,"./message":106,"./shared":108}],106:[function(require,module,exports){
+},{"../facade/collection":98,"../facade/exceptions":100,"../facade/lang":101,"../html_ast":104,"../html_parser":106,"../interpolation_config":115,"./expander":108,"./message":110,"./shared":112}],110:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -13301,7 +13537,7 @@ function id(m) {
 }
 exports.id = id;
 
-},{"../facade/lang":97}],107:[function(require,module,exports){
+},{"../facade/lang":101}],111:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -13475,7 +13711,7 @@ var MessageExtractor = (function () {
 }());
 exports.MessageExtractor = MessageExtractor;
 
-},{"../facade/collection":94,"../facade/lang":97,"../html_ast":100,"../interpolation_config":111,"./message":106,"./shared":108}],108:[function(require,module,exports){
+},{"../facade/collection":98,"../facade/lang":101,"../html_ast":104,"../interpolation_config":115,"./message":110,"./shared":112}],112:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -13689,7 +13925,7 @@ var _StringifyVisitor = (function () {
     return _StringifyVisitor;
 }());
 
-},{"../facade/lang":97,"../html_ast":100,"../parse_util":123,"./message":106}],109:[function(require,module,exports){
+},{"../facade/lang":101,"../html_ast":104,"../parse_util":127,"./message":110}],113:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -13800,7 +14036,7 @@ function _escapeXml(value) {
     return _XML_ESCAPED_CHARS.reduce(function (value, escape) { return value.replace(escape[0], escape[1]); }, value);
 }
 
-},{"../facade/lang":97,"../html_ast":100,"../html_parser":102,"../parse_util":123,"./message":106}],110:[function(require,module,exports){
+},{"../facade/lang":101,"../html_ast":104,"../html_parser":106,"../parse_util":127,"./message":110}],114:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -14008,7 +14244,7 @@ function identifierToken(identifier) {
 }
 exports.identifierToken = identifierToken;
 
-},{"../core_private":74,"./compile_metadata":83,"./util":138,"@angular/core":156}],111:[function(require,module,exports){
+},{"../core_private":78,"./compile_metadata":87,"./util":142,"@angular/core":160}],115:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -14022,7 +14258,7 @@ exports.DEFAULT_INTERPOLATION_CONFIG = {
     end: '}}'
 };
 
-},{}],112:[function(require,module,exports){
+},{}],116:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -14529,7 +14765,7 @@ var _CompileValueConverter = (function (_super) {
     return _CompileValueConverter;
 }(util_1.ValueTransformer));
 
-},{"../core_private":74,"../src/facade/collection":94,"../src/facade/exceptions":96,"../src/facade/lang":97,"./assertions":81,"./compile_metadata":83,"./config":85,"./directive_lifecycle_reflector":86,"./directive_resolver":88,"./pipe_resolver":124,"./url_resolver":137,"./util":138,"./view_resolver":154,"@angular/core":156}],113:[function(require,module,exports){
+},{"../core_private":78,"../src/facade/collection":98,"../src/facade/exceptions":100,"../src/facade/lang":101,"./assertions":85,"./compile_metadata":87,"./config":89,"./directive_lifecycle_reflector":90,"./directive_resolver":92,"./pipe_resolver":128,"./url_resolver":141,"./util":142,"./view_resolver":158,"@angular/core":160}],117:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -14685,7 +14921,7 @@ function _splitLastSuffix(path) {
     }
 }
 
-},{"./compile_metadata":83,"./facade/collection":94,"./facade/exceptions":96,"./output/output_ast":118,"./util":138,"./view_compiler/view_compiler":153,"@angular/core":156}],114:[function(require,module,exports){
+},{"./compile_metadata":87,"./facade/collection":98,"./facade/exceptions":100,"./output/output_ast":122,"./util":142,"./view_compiler/view_compiler":157,"@angular/core":160}],118:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -15104,7 +15340,7 @@ function _createIndent(count) {
     return res;
 }
 
-},{"../facade/exceptions":96,"../facade/lang":97,"./output_ast":118}],115:[function(require,module,exports){
+},{"../facade/exceptions":100,"../facade/lang":101,"./output_ast":122}],119:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -15276,7 +15512,7 @@ var AbstractJsEmitterVisitor = (function (_super) {
 }(abstract_emitter_1.AbstractEmitterVisitor));
 exports.AbstractJsEmitterVisitor = AbstractJsEmitterVisitor;
 
-},{"../facade/exceptions":96,"../facade/lang":97,"./abstract_emitter":114,"./output_ast":118}],116:[function(require,module,exports){
+},{"../facade/exceptions":100,"../facade/lang":101,"./abstract_emitter":118,"./output_ast":122}],120:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -15665,7 +15901,7 @@ function isConstType(type) {
     return lang_1.isPresent(type) && type.hasModifier(o.TypeModifier.Const);
 }
 
-},{"../facade/exceptions":96,"../facade/lang":97,"./abstract_emitter":114,"./output_ast":118}],117:[function(require,module,exports){
+},{"../facade/exceptions":100,"../facade/lang":101,"./abstract_emitter":118,"./output_ast":122}],121:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -15766,7 +16002,7 @@ var _InterpretiveAppView = (function (_super) {
     return _InterpretiveAppView;
 }(core_private_1.DebugAppView));
 
-},{"../../core_private":74,"../facade/exceptions":96,"../facade/lang":97}],118:[function(require,module,exports){
+},{"../../core_private":78,"../facade/exceptions":100,"../facade/lang":101}],122:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -16753,7 +16989,7 @@ function fn(params, body, type) {
 }
 exports.fn = fn;
 
-},{"../facade/lang":97}],119:[function(require,module,exports){
+},{"../facade/lang":101}],123:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -17211,7 +17447,7 @@ function _declareFn(varNames, statements, ctx, visitor) {
 var CATCH_ERROR_VAR = 'error';
 var CATCH_STACK_VAR = 'stack';
 
-},{"../../core_private":74,"../facade/async":92,"../facade/collection":94,"../facade/exceptions":96,"../facade/lang":97,"./dart_emitter":116,"./output_ast":118,"./ts_emitter":122}],120:[function(require,module,exports){
+},{"../../core_private":78,"../facade/async":96,"../facade/collection":98,"../facade/exceptions":100,"../facade/lang":101,"./dart_emitter":120,"./output_ast":122,"./ts_emitter":126}],124:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -17265,7 +17501,7 @@ var JitEmitterVisitor = (function (_super) {
     return JitEmitterVisitor;
 }(abstract_js_emitter_1.AbstractJsEmitterVisitor));
 
-},{"../facade/lang":97,"../util":138,"./abstract_emitter":114,"./abstract_js_emitter":115}],121:[function(require,module,exports){
+},{"../facade/lang":101,"../util":142,"./abstract_emitter":118,"./abstract_js_emitter":119}],125:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -17309,7 +17545,7 @@ var AssetUrl = (function () {
 }());
 exports.AssetUrl = AssetUrl;
 
-},{"../facade/exceptions":96,"../facade/lang":97}],122:[function(require,module,exports){
+},{"../facade/exceptions":100,"../facade/lang":101}],126:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -17622,7 +17858,7 @@ var _TsEmitterVisitor = (function (_super) {
     return _TsEmitterVisitor;
 }(abstract_emitter_1.AbstractEmitterVisitor));
 
-},{"../facade/exceptions":96,"../facade/lang":97,"./abstract_emitter":114,"./output_ast":118}],123:[function(require,module,exports){
+},{"../facade/exceptions":100,"../facade/lang":101,"./abstract_emitter":118,"./output_ast":122}],127:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -17710,7 +17946,7 @@ var ParseError = (function () {
 }());
 exports.ParseError = ParseError;
 
-},{}],124:[function(require,module,exports){
+},{}],128:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -17756,7 +17992,7 @@ var PipeResolver = (function () {
 }());
 exports.PipeResolver = PipeResolver;
 
-},{"../core_private":74,"../src/facade/exceptions":96,"../src/facade/lang":97,"@angular/core":156}],125:[function(require,module,exports){
+},{"../core_private":78,"../src/facade/exceptions":100,"../src/facade/lang":101,"@angular/core":160}],129:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -18140,7 +18376,7 @@ function _addQueryToTokenMap(map, query) {
     });
 }
 
-},{"../src/facade/collection":94,"../src/facade/lang":97,"./compile_metadata":83,"./identifiers":110,"./parse_util":123,"./template_ast":134}],126:[function(require,module,exports){
+},{"../src/facade/collection":98,"../src/facade/lang":101,"./compile_metadata":87,"./identifiers":114,"./parse_util":127,"./template_ast":138}],130:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -18396,7 +18632,7 @@ function assertComponent(meta) {
     }
 }
 
-},{"../src/facade/async":92,"../src/facade/exceptions":96,"../src/facade/lang":97,"./compile_metadata":83,"./config":85,"./directive_normalizer":87,"./metadata_resolver":112,"./output/interpretive_view":117,"./output/output_ast":118,"./output/output_interpreter":119,"./output/output_jit":120,"./style_compiler":132,"./template_parser":135,"./view_compiler/view_compiler":153,"@angular/core":156}],127:[function(require,module,exports){
+},{"../src/facade/async":96,"../src/facade/exceptions":100,"../src/facade/lang":101,"./compile_metadata":87,"./config":89,"./directive_normalizer":91,"./metadata_resolver":116,"./output/interpretive_view":121,"./output/output_ast":122,"./output/output_interpreter":123,"./output/output_jit":124,"./style_compiler":136,"./template_parser":139,"./view_compiler/view_compiler":157,"@angular/core":160}],131:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -18718,7 +18954,7 @@ var DomElementSchemaRegistry = (function (_super) {
 }(element_schema_registry_1.ElementSchemaRegistry));
 exports.DomElementSchemaRegistry = DomElementSchemaRegistry;
 
-},{"../../core_private":74,"../facade/collection":94,"../facade/lang":97,"./dom_security_schema":128,"./element_schema_registry":129,"@angular/core":156}],128:[function(require,module,exports){
+},{"../../core_private":78,"../facade/collection":98,"../facade/lang":101,"./dom_security_schema":132,"./element_schema_registry":133,"@angular/core":160}],132:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -18777,7 +19013,7 @@ registerContext(core_private_1.SecurityContext.RESOURCE_URL, [
     'track|src',
 ]);
 
-},{"../../core_private":74}],129:[function(require,module,exports){
+},{"../../core_private":78}],133:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -18793,7 +19029,7 @@ var ElementSchemaRegistry = (function () {
 }());
 exports.ElementSchemaRegistry = ElementSchemaRegistry;
 
-},{}],130:[function(require,module,exports){
+},{}],134:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -19159,7 +19395,7 @@ var SelectorContext = (function () {
 }());
 exports.SelectorContext = SelectorContext;
 
-},{"../src/facade/collection":94,"../src/facade/exceptions":96,"../src/facade/lang":97}],131:[function(require,module,exports){
+},{"../src/facade/collection":98,"../src/facade/exceptions":100,"../src/facade/lang":101}],135:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -19667,7 +19903,7 @@ function escapeBlocks(input) {
     return new StringWithEscapedBlocks(resultParts.join(''), escapedBlocks);
 }
 
-},{"../src/facade/collection":94,"../src/facade/lang":97}],132:[function(require,module,exports){
+},{"../src/facade/collection":98,"../src/facade/lang":101}],136:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -19772,7 +20008,7 @@ function getStylesVarName(component) {
     return result;
 }
 
-},{"./compile_metadata":83,"./output/output_ast":118,"./shadow_css":131,"./url_resolver":137,"@angular/core":156}],133:[function(require,module,exports){
+},{"./compile_metadata":87,"./output/output_ast":122,"./shadow_css":135,"./url_resolver":141,"@angular/core":160}],137:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -19822,7 +20058,7 @@ var _cssImportRe = /@import\s+(?:url\()?\s*(?:(?:['"]([^'"]*))|([^;\)\s]*))[^;]*
 //       https://github.com/angular/angular/issues/4596
 var _urlWithSchemaRe = /^([a-zA-Z\-\+\.]+):/g;
 
-},{"../src/facade/lang":97}],134:[function(require,module,exports){
+},{"../src/facade/lang":101}],138:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -20111,7 +20347,7 @@ function templateVisitAll(visitor, asts, context) {
 }
 exports.templateVisitAll = templateVisitAll;
 
-},{"../src/facade/lang":97}],135:[function(require,module,exports){
+},{"../src/facade/lang":101}],139:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -20946,7 +21182,7 @@ function removeDuplicates(items) {
     return res;
 }
 
-},{"../core_private":74,"../src/facade/collection":94,"../src/facade/exceptions":96,"../src/facade/lang":97,"./expression_parser/ast":89,"./expression_parser/parser":91,"./html_ast":100,"./html_parser":102,"./html_tags":103,"./identifiers":110,"./parse_util":123,"./provider_parser":125,"./schema/element_schema_registry":129,"./selector":130,"./style_url_resolver":133,"./template_ast":134,"./template_preparser":136,"./util":138,"@angular/core":156}],136:[function(require,module,exports){
+},{"../core_private":78,"../src/facade/collection":98,"../src/facade/exceptions":100,"../src/facade/lang":101,"./expression_parser/ast":93,"./expression_parser/parser":95,"./html_ast":104,"./html_parser":106,"./html_tags":107,"./identifiers":114,"./parse_util":127,"./provider_parser":129,"./schema/element_schema_registry":133,"./selector":134,"./style_url_resolver":137,"./template_ast":138,"./template_preparser":140,"./util":142,"@angular/core":160}],140:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -21037,7 +21273,7 @@ function normalizeNgContentSelect(selectAttr) {
     return selectAttr;
 }
 
-},{"../src/facade/lang":97,"./html_tags":103}],137:[function(require,module,exports){
+},{"../src/facade/lang":101,"./html_tags":107}],141:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -21360,7 +21596,7 @@ function _resolveUrl(base, url) {
     return _joinAndCanonicalizePath(parts);
 }
 
-},{"../src/facade/lang":97,"@angular/core":156}],138:[function(require,module,exports){
+},{"../src/facade/lang":101,"@angular/core":160}],142:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -21448,7 +21684,7 @@ function assetUrl(pkg, path, type) {
 }
 exports.assetUrl = assetUrl;
 
-},{"./facade/collection":94,"./facade/lang":97}],139:[function(require,module,exports){
+},{"./facade/collection":98,"./facade/lang":101}],143:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -21466,7 +21702,7 @@ var CompileBinding = (function () {
 }());
 exports.CompileBinding = CompileBinding;
 
-},{}],140:[function(require,module,exports){
+},{}],144:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -21877,7 +22113,7 @@ var _ValueOutputAstTransformer = (function (_super) {
     return _ValueOutputAstTransformer;
 }(util_2.ValueTransformer));
 
-},{"../compile_metadata":83,"../facade/collection":94,"../facade/lang":97,"../identifiers":110,"../output/output_ast":118,"../template_ast":134,"../util":138,"./compile_method":141,"./compile_query":143,"./constants":145,"./util":150,"@angular/core":156}],141:[function(require,module,exports){
+},{"../compile_metadata":87,"../facade/collection":98,"../facade/lang":101,"../identifiers":114,"../output/output_ast":122,"../template_ast":138,"../util":142,"./compile_method":145,"./compile_query":147,"./constants":149,"./util":154,"@angular/core":160}],145:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -21949,7 +22185,7 @@ var CompileMethod = (function () {
 }());
 exports.CompileMethod = CompileMethod;
 
-},{"../facade/collection":94,"../facade/lang":97,"../output/output_ast":118}],142:[function(require,module,exports){
+},{"../facade/collection":98,"../facade/lang":101,"../output/output_ast":122}],146:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -22056,7 +22292,7 @@ function _findPipeMeta(view, name) {
     return pipeMeta;
 }
 
-},{"../facade/exceptions":96,"../facade/lang":97,"../identifiers":110,"../output/output_ast":118,"./util":150}],143:[function(require,module,exports){
+},{"../facade/exceptions":100,"../facade/lang":101,"../identifiers":114,"../output/output_ast":122,"./util":154}],147:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -22177,7 +22413,7 @@ function addQueryToTokenMap(map, query) {
 }
 exports.addQueryToTokenMap = addQueryToTokenMap;
 
-},{"../facade/collection":94,"../facade/lang":97,"../identifiers":110,"../output/output_ast":118,"./util":150}],144:[function(require,module,exports){
+},{"../facade/collection":98,"../facade/lang":101,"../identifiers":114,"../output/output_ast":122,"./util":154}],148:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -22346,7 +22582,7 @@ function getViewType(component, embeddedTemplateIndex) {
     }
 }
 
-},{"../../core_private":74,"../compile_metadata":83,"../facade/collection":94,"../facade/lang":97,"../identifiers":110,"../output/output_ast":118,"./compile_method":141,"./compile_pipe":142,"./compile_query":143,"./constants":145,"./util":150}],145:[function(require,module,exports){
+},{"../../core_private":78,"../compile_metadata":87,"../facade/collection":98,"../facade/lang":101,"../identifiers":114,"../output/output_ast":122,"./compile_method":145,"./compile_pipe":146,"./compile_query":147,"./constants":149,"./util":154}],149:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -22466,7 +22702,7 @@ var DetectChangesVars = (function () {
 }());
 exports.DetectChangesVars = DetectChangesVars;
 
-},{"../../core_private":74,"../compile_metadata":83,"../facade/lang":97,"../identifiers":110,"../output/output_ast":118,"@angular/core":156}],146:[function(require,module,exports){
+},{"../../core_private":78,"../compile_metadata":87,"../facade/lang":101,"../identifiers":114,"../output/output_ast":122,"@angular/core":160}],150:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -22608,7 +22844,7 @@ function santitizeEventName(name) {
     return lang_1.StringWrapper.replaceAll(name, /[^a-zA-Z_]/g, '_');
 }
 
-},{"../facade/collection":94,"../facade/lang":97,"../output/output_ast":118,"./compile_binding":139,"./compile_method":141,"./constants":145,"./expression_converter":147}],147:[function(require,module,exports){
+},{"../facade/collection":98,"../facade/lang":101,"../output/output_ast":122,"./compile_binding":143,"./compile_method":145,"./constants":149,"./expression_converter":151}],151:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -22853,7 +23089,7 @@ function flattenStatements(arg, output) {
     }
 }
 
-},{"../facade/exceptions":96,"../facade/lang":97,"../identifiers":110,"../output/output_ast":118}],148:[function(require,module,exports){
+},{"../facade/exceptions":100,"../facade/lang":101,"../identifiers":114,"../output/output_ast":122}],152:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -22924,7 +23160,7 @@ function bindPipeDestroyLifecycleCallbacks(pipeMeta, pipeInstance, view) {
 }
 exports.bindPipeDestroyLifecycleCallbacks = bindPipeDestroyLifecycleCallbacks;
 
-},{"../../core_private":74,"../output/output_ast":118,"./constants":145}],149:[function(require,module,exports){
+},{"../../core_private":78,"../output/output_ast":122,"./constants":149}],153:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -23143,7 +23379,7 @@ function logBindingUpdateStmt(renderNode, propName, value) {
         .toStmt();
 }
 
-},{"../../core_private":74,"../facade/lang":97,"../identifiers":110,"../output/output_ast":118,"../template_ast":134,"../util":138,"./compile_binding":139,"./constants":145,"./expression_converter":147,"@angular/core":156}],150:[function(require,module,exports){
+},{"../../core_private":78,"../facade/lang":101,"../identifiers":114,"../output/output_ast":122,"../template_ast":138,"../util":142,"./compile_binding":143,"./constants":149,"./expression_converter":151,"@angular/core":160}],154:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -23241,7 +23477,7 @@ function createPureProxy(fn, argCount, pureProxyProp, view) {
 }
 exports.createPureProxy = createPureProxy;
 
-},{"../facade/exceptions":96,"../facade/lang":97,"../identifiers":110,"../output/output_ast":118}],151:[function(require,module,exports){
+},{"../facade/exceptions":100,"../facade/lang":101,"../identifiers":114,"../output/output_ast":122}],155:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -23326,7 +23562,7 @@ var ViewBinderVisitor = (function () {
     return ViewBinderVisitor;
 }());
 
-},{"../facade/collection":94,"../template_ast":134,"./event_binder":146,"./lifecycle_binder":148,"./property_binder":149}],152:[function(require,module,exports){
+},{"../facade/collection":98,"../template_ast":138,"./event_binder":150,"./lifecycle_binder":152,"./property_binder":153}],156:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -23839,7 +24075,7 @@ function getChangeDetectionMode(view) {
     return mode;
 }
 
-},{"../../core_private":74,"../animation/animation_compiler":78,"../compile_metadata":83,"../facade/collection":94,"../facade/lang":97,"../identifiers":110,"../output/output_ast":118,"../template_ast":134,"./compile_element":140,"./compile_view":144,"./constants":145,"./util":150,"@angular/core":156}],153:[function(require,module,exports){
+},{"../../core_private":78,"../animation/animation_compiler":82,"../compile_metadata":87,"../facade/collection":98,"../facade/lang":101,"../identifiers":114,"../output/output_ast":122,"../template_ast":138,"./compile_element":144,"./compile_view":148,"./constants":149,"./util":154,"@angular/core":160}],157:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -23900,7 +24136,7 @@ var ViewCompiler = (function () {
 }());
 exports.ViewCompiler = ViewCompiler;
 
-},{"../animation/animation_compiler":78,"../config":85,"./compile_element":140,"./compile_view":144,"./view_binder":151,"./view_builder":152,"@angular/core":156}],154:[function(require,module,exports){
+},{"../animation/animation_compiler":82,"../config":89,"./compile_element":144,"./compile_view":148,"./view_binder":155,"./view_builder":156,"@angular/core":160}],158:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -23959,7 +24195,7 @@ var ViewResolver = (function () {
 }());
 exports.ViewResolver = ViewResolver;
 
-},{"../core_private":74,"../src/facade/exceptions":96,"../src/facade/lang":97,"@angular/core":156}],155:[function(require,module,exports){
+},{"../core_private":78,"../src/facade/exceptions":100,"../src/facade/lang":101,"@angular/core":160}],159:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -23981,7 +24217,7 @@ var XHR = (function () {
 }());
 exports.XHR = XHR;
 
-},{}],156:[function(require,module,exports){
+},{}],160:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -24050,7 +24286,7 @@ __export(require('./src/animation/metadata'));
 var animation_player_1 = require('./src/animation/animation_player');
 exports.AnimationPlayer = animation_player_1.AnimationPlayer;
 
-},{"./private_export":157,"./src/animation/animation_player":163,"./src/animation/metadata":167,"./src/application_common_providers":168,"./src/application_ref":169,"./src/application_tokens":170,"./src/change_detection":171,"./src/debug/debug_node":181,"./src/di":183,"./src/facade/async":195,"./src/facade/exceptions":199,"./src/facade/lang":200,"./src/linker":203,"./src/metadata":222,"./src/platform_common_providers":227,"./src/platform_directives_and_pipes":228,"./src/profile/profile":229,"./src/render":236,"./src/testability/testability":239,"./src/util":240,"./src/zone":242}],157:[function(require,module,exports){
+},{"./private_export":161,"./src/animation/animation_player":167,"./src/animation/metadata":171,"./src/application_common_providers":172,"./src/application_ref":173,"./src/application_tokens":174,"./src/change_detection":175,"./src/debug/debug_node":185,"./src/di":187,"./src/facade/async":199,"./src/facade/exceptions":203,"./src/facade/lang":204,"./src/linker":207,"./src/metadata":226,"./src/platform_common_providers":231,"./src/platform_directives_and_pipes":232,"./src/profile/profile":233,"./src/render":240,"./src/testability/testability":243,"./src/util":244,"./src/zone":246}],161:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -24161,7 +24397,7 @@ exports.__core_private__ = {
     FILL_STYLE_FLAG: animation_constants_1.FILL_STYLE_FLAG
 };
 
-},{"./src/animation/animation_constants":159,"./src/animation/animation_driver":160,"./src/animation/animation_group_player":161,"./src/animation/animation_keyframe":162,"./src/animation/animation_player":163,"./src/animation/animation_sequence_player":164,"./src/animation/animation_style_util":165,"./src/animation/animation_styles":166,"./src/change_detection/change_detection_util":173,"./src/change_detection/constants":175,"./src/console":180,"./src/debug/debug_renderer":182,"./src/di/provider_util":190,"./src/di/reflective_provider":194,"./src/linker/component_factory_resolver":206,"./src/linker/component_resolver":207,"./src/linker/debug_context":208,"./src/linker/element":210,"./src/linker/template_ref":216,"./src/linker/view":217,"./src/linker/view_type":220,"./src/linker/view_utils":221,"./src/metadata/lifecycle_hooks":225,"./src/metadata/view":226,"./src/profile/wtf_init":231,"./src/reflection/reflection":232,"./src/reflection/reflection_capabilities":233,"./src/reflection/reflector_reader":235,"./src/render/api":237,"./src/security":238,"./src/util/decorators":241}],158:[function(require,module,exports){
+},{"./src/animation/animation_constants":163,"./src/animation/animation_driver":164,"./src/animation/animation_group_player":165,"./src/animation/animation_keyframe":166,"./src/animation/animation_player":167,"./src/animation/animation_sequence_player":168,"./src/animation/animation_style_util":169,"./src/animation/animation_styles":170,"./src/change_detection/change_detection_util":177,"./src/change_detection/constants":179,"./src/console":184,"./src/debug/debug_renderer":186,"./src/di/provider_util":194,"./src/di/reflective_provider":198,"./src/linker/component_factory_resolver":210,"./src/linker/component_resolver":211,"./src/linker/debug_context":212,"./src/linker/element":214,"./src/linker/template_ref":220,"./src/linker/view":221,"./src/linker/view_type":224,"./src/linker/view_utils":225,"./src/metadata/lifecycle_hooks":229,"./src/metadata/view":230,"./src/profile/wtf_init":235,"./src/reflection/reflection":236,"./src/reflection/reflection_capabilities":237,"./src/reflection/reflector_reader":239,"./src/render/api":241,"./src/security":242,"./src/util/decorators":245}],162:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -24223,7 +24459,7 @@ var ActiveAnimationPlayersMap = (function () {
 }());
 exports.ActiveAnimationPlayersMap = ActiveAnimationPlayersMap;
 
-},{"../facade/collection":197,"../facade/lang":200}],159:[function(require,module,exports){
+},{"../facade/collection":201,"../facade/lang":204}],163:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -24237,7 +24473,7 @@ exports.ANY_STATE = '*';
 exports.DEFAULT_STATE = '*';
 exports.EMPTY_STATE = 'void';
 
-},{}],160:[function(require,module,exports){
+},{}],164:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -24270,7 +24506,7 @@ var NoOpAnimationDriver = (function (_super) {
 }(AnimationDriver));
 exports.NoOpAnimationDriver = NoOpAnimationDriver;
 
-},{"./animation_player":163}],161:[function(require,module,exports){
+},{"./animation_player":167}],165:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -24342,7 +24578,7 @@ var AnimationGroupPlayer = (function () {
 }());
 exports.AnimationGroupPlayer = AnimationGroupPlayer;
 
-},{"../facade/lang":200,"../facade/math":201}],162:[function(require,module,exports){
+},{"../facade/lang":204,"../facade/math":205}],166:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -24360,7 +24596,7 @@ var AnimationKeyframe = (function () {
 }());
 exports.AnimationKeyframe = AnimationKeyframe;
 
-},{}],163:[function(require,module,exports){
+},{}],167:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -24413,7 +24649,7 @@ var NoOpAnimationPlayer = (function () {
 }());
 exports.NoOpAnimationPlayer = NoOpAnimationPlayer;
 
-},{"../facade/exceptions":199,"../facade/lang":200}],164:[function(require,module,exports){
+},{"../facade/exceptions":203,"../facade/lang":204}],168:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -24490,7 +24726,7 @@ var AnimationSequencePlayer = (function () {
 }());
 exports.AnimationSequencePlayer = AnimationSequencePlayer;
 
-},{"../facade/lang":200,"./animation_player":163}],165:[function(require,module,exports){
+},{"../facade/lang":204,"./animation_player":167}],169:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -24597,7 +24833,7 @@ function flattenStyles(styles) {
 }
 exports.flattenStyles = flattenStyles;
 
-},{"../facade/collection":197,"../facade/lang":200,"./animation_constants":159,"./metadata":167}],166:[function(require,module,exports){
+},{"../facade/collection":201,"../facade/lang":204,"./animation_constants":163,"./metadata":171}],170:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -24614,7 +24850,7 @@ var AnimationStyles = (function () {
 }());
 exports.AnimationStyles = AnimationStyles;
 
-},{}],167:[function(require,module,exports){
+},{}],171:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -25293,7 +25529,7 @@ function trigger(name, animation) {
 }
 exports.trigger = trigger;
 
-},{"../facade/exceptions":199,"../facade/lang":200}],168:[function(require,module,exports){
+},{"../facade/exceptions":203,"../facade/lang":204}],172:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -25327,7 +25563,7 @@ exports.APPLICATION_COMMON_PROVIDERS =
     /* @ts2dart_Provider */ { provide: dynamic_component_loader_1.DynamicComponentLoader, useClass: dynamic_component_loader_1.DynamicComponentLoader_ },
 ];
 
-},{"./application_ref":169,"./application_tokens":170,"./change_detection/change_detection":172,"./linker/component_factory_resolver":206,"./linker/component_resolver":207,"./linker/dynamic_component_loader":209,"./linker/view_utils":221}],169:[function(require,module,exports){
+},{"./application_ref":173,"./application_tokens":174,"./change_detection/change_detection":176,"./linker/component_factory_resolver":210,"./linker/component_resolver":211,"./linker/dynamic_component_loader":213,"./linker/view_utils":225}],173:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -25810,7 +26046,7 @@ exports.APPLICATION_CORE_PROVIDERS = [
     /* @ts2dart_Provider */ { provide: ApplicationRef, useExisting: ApplicationRef_ },
 ];
 
-},{"../src/facade/async":195,"../src/facade/collection":197,"../src/facade/exceptions":199,"../src/facade/lang":200,"./application_tokens":170,"./console":180,"./di":183,"./linker/component_resolver":207,"./profile/profile":229,"./testability/testability":239,"./zone/ng_zone":243}],170:[function(require,module,exports){
+},{"../src/facade/async":199,"../src/facade/collection":201,"../src/facade/exceptions":203,"../src/facade/lang":204,"./application_tokens":174,"./console":184,"./di":187,"./linker/component_resolver":211,"./profile/profile":233,"./testability/testability":243,"./zone/ng_zone":247}],174:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -25867,7 +26103,7 @@ exports.APP_INITIALIZER =
 exports.PACKAGE_ROOT_URL = 
 /*@ts2dart_const*/ new di_1.OpaqueToken('Application Packages Root URL');
 
-},{"../src/facade/lang":200,"./di":183}],171:[function(require,module,exports){
+},{"../src/facade/lang":204,"./di":187}],175:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -25892,7 +26128,7 @@ exports.KeyValueDiffers = change_detection_1.KeyValueDiffers;
 exports.SimpleChange = change_detection_1.SimpleChange;
 exports.WrappedValue = change_detection_1.WrappedValue;
 
-},{"./change_detection/change_detection":172}],172:[function(require,module,exports){
+},{"./change_detection/change_detection":176}],176:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -25944,7 +26180,7 @@ exports.iterableDiff =
 exports.defaultIterableDiffers = new iterable_differs_1.IterableDiffers(exports.iterableDiff);
 exports.defaultKeyValueDiffers = new keyvalue_differs_1.KeyValueDiffers(exports.keyValDiff);
 
-},{"./change_detection_util":173,"./change_detector_ref":174,"./constants":175,"./differs/default_iterable_differ":176,"./differs/default_keyvalue_differ":177,"./differs/iterable_differs":178,"./differs/keyvalue_differs":179}],173:[function(require,module,exports){
+},{"./change_detection_util":177,"./change_detector_ref":178,"./constants":179,"./differs/default_iterable_differ":180,"./differs/default_keyvalue_differ":181,"./differs/iterable_differs":182,"./differs/keyvalue_differs":183}],177:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -26032,7 +26268,7 @@ var SimpleChange = (function () {
 }());
 exports.SimpleChange = SimpleChange;
 
-},{"../facade/collection":197,"../facade/lang":200}],174:[function(require,module,exports){
+},{"../facade/collection":201,"../facade/lang":204}],178:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -26051,7 +26287,7 @@ var ChangeDetectorRef = (function () {
 }());
 exports.ChangeDetectorRef = ChangeDetectorRef;
 
-},{}],175:[function(require,module,exports){
+},{}],179:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -26137,7 +26373,7 @@ function isDefaultChangeDetectionStrategy(changeDetectionStrategy) {
 }
 exports.isDefaultChangeDetectionStrategy = isDefaultChangeDetectionStrategy;
 
-},{"../facade/lang":200}],176:[function(require,module,exports){
+},{"../facade/lang":204}],180:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -26805,7 +27041,7 @@ var _DuplicateMap = (function () {
     return _DuplicateMap;
 }());
 
-},{"../../facade/collection":197,"../../facade/exceptions":199,"../../facade/lang":200}],177:[function(require,module,exports){
+},{"../../facade/collection":201,"../../facade/exceptions":203,"../../facade/lang":204}],181:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -27173,7 +27409,7 @@ var KeyValueChangeRecord = (function () {
 }());
 exports.KeyValueChangeRecord = KeyValueChangeRecord;
 
-},{"../../facade/collection":197,"../../facade/exceptions":199,"../../facade/lang":200}],178:[function(require,module,exports){
+},{"../../facade/collection":201,"../../facade/exceptions":203,"../../facade/lang":204}],182:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -27253,7 +27489,7 @@ var IterableDiffers = (function () {
 }());
 exports.IterableDiffers = IterableDiffers;
 
-},{"../../di":183,"../../facade/collection":197,"../../facade/exceptions":199,"../../facade/lang":200}],179:[function(require,module,exports){
+},{"../../di":187,"../../facade/collection":201,"../../facade/exceptions":203,"../../facade/lang":204}],183:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -27333,7 +27569,7 @@ var KeyValueDiffers = (function () {
 }());
 exports.KeyValueDiffers = KeyValueDiffers;
 
-},{"../../di":183,"../../facade/collection":197,"../../facade/exceptions":199,"../../facade/lang":200}],180:[function(require,module,exports){
+},{"../../di":187,"../../facade/collection":201,"../../facade/exceptions":203,"../../facade/lang":204}],184:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -27361,7 +27597,7 @@ var Console = (function () {
 }());
 exports.Console = Console;
 
-},{"./di/decorators":184,"./facade/lang":200}],181:[function(require,module,exports){
+},{"./di/decorators":188,"./facade/lang":204}],185:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -27577,7 +27813,7 @@ function removeDebugNodeFromIndex(node) {
 }
 exports.removeDebugNodeFromIndex = removeDebugNodeFromIndex;
 
-},{"../facade/collection":197,"../facade/lang":200}],182:[function(require,module,exports){
+},{"../facade/collection":201,"../facade/lang":204}],186:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -27713,7 +27949,7 @@ var DebugDomRenderer = (function () {
 }());
 exports.DebugDomRenderer = DebugDomRenderer;
 
-},{"../facade/lang":200,"./debug_node":181}],183:[function(require,module,exports){
+},{"../facade/lang":204,"./debug_node":185}],187:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -27767,7 +28003,7 @@ exports.OutOfBoundsError = reflective_exceptions_1.OutOfBoundsError;
 var opaque_token_1 = require('./di/opaque_token');
 exports.OpaqueToken = opaque_token_1.OpaqueToken;
 
-},{"./di/decorators":184,"./di/forward_ref":185,"./di/injector":186,"./di/metadata":187,"./di/opaque_token":188,"./di/provider":189,"./di/reflective_exceptions":191,"./di/reflective_injector":192,"./di/reflective_key":193,"./di/reflective_provider":194}],184:[function(require,module,exports){
+},{"./di/decorators":188,"./di/forward_ref":189,"./di/injector":190,"./di/metadata":191,"./di/opaque_token":192,"./di/provider":193,"./di/reflective_exceptions":195,"./di/reflective_injector":196,"./di/reflective_key":197,"./di/reflective_provider":198}],188:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -27815,7 +28051,7 @@ exports.Host = decorators_1.makeParamDecorator(metadata_1.HostMetadata);
  */
 exports.SkipSelf = decorators_1.makeParamDecorator(metadata_1.SkipSelfMetadata);
 
-},{"../util/decorators":241,"./metadata":187}],185:[function(require,module,exports){
+},{"../util/decorators":245,"./metadata":191}],189:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -27870,7 +28106,7 @@ function resolveForwardRef(type) {
 }
 exports.resolveForwardRef = resolveForwardRef;
 
-},{"../facade/lang":200}],186:[function(require,module,exports){
+},{"../facade/lang":204}],190:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -27918,7 +28154,7 @@ var Injector = (function () {
 }());
 exports.Injector = Injector;
 
-},{"../facade/exceptions":199}],187:[function(require,module,exports){
+},{"../facade/exceptions":203}],191:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -28198,7 +28434,7 @@ var HostMetadata = (function () {
 }());
 exports.HostMetadata = HostMetadata;
 
-},{"../facade/lang":200}],188:[function(require,module,exports){
+},{"../facade/lang":204}],192:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -28239,7 +28475,7 @@ var OpaqueToken = (function () {
 }());
 exports.OpaqueToken = OpaqueToken;
 
-},{}],189:[function(require,module,exports){
+},{}],193:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -28531,7 +28767,7 @@ function provide(token, _a) {
 }
 exports.provide = provide;
 
-},{"../facade/exceptions":199,"../facade/lang":200}],190:[function(require,module,exports){
+},{"../facade/exceptions":203,"../facade/lang":204}],194:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -28550,7 +28786,7 @@ function createProvider(obj) {
 }
 exports.createProvider = createProvider;
 
-},{"./provider":189}],191:[function(require,module,exports){
+},{"./provider":193}],195:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -28841,7 +29077,7 @@ var MixingMultiProvidersWithRegularProvidersError = (function (_super) {
 }(exceptions_1.BaseException));
 exports.MixingMultiProvidersWithRegularProvidersError = MixingMultiProvidersWithRegularProvidersError;
 
-},{"../facade/collection":197,"../facade/exceptions":199,"../facade/lang":200}],192:[function(require,module,exports){
+},{"../facade/collection":201,"../facade/exceptions":203,"../facade/lang":204}],196:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -29680,7 +29916,7 @@ function _mapProviders(injector, fn) {
     return res;
 }
 
-},{"../facade/collection":197,"../facade/exceptions":199,"./injector":186,"./metadata":187,"./reflective_exceptions":191,"./reflective_key":193,"./reflective_provider":194}],193:[function(require,module,exports){
+},{"../facade/collection":201,"../facade/exceptions":203,"./injector":190,"./metadata":191,"./reflective_exceptions":195,"./reflective_key":197,"./reflective_provider":198}],197:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -29771,7 +30007,7 @@ var KeyRegistry = (function () {
 exports.KeyRegistry = KeyRegistry;
 var _globalKeyRegistry = new KeyRegistry();
 
-},{"../facade/exceptions":199,"../facade/lang":200,"./forward_ref":185}],194:[function(require,module,exports){
+},{"../facade/exceptions":203,"../facade/lang":204,"./forward_ref":189}],198:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -30018,17 +30254,17 @@ function _createDependency(token /** TODO #9100 */, optional /** TODO #9100 */, 
     return new ReflectiveDependency(reflective_key_1.ReflectiveKey.get(token), optional, lowerBoundVisibility, upperBoundVisibility, depProps);
 }
 
-},{"../facade/collection":197,"../facade/lang":200,"../reflection/reflection":232,"./forward_ref":185,"./metadata":187,"./provider":189,"./provider_util":190,"./reflective_exceptions":191,"./reflective_key":193}],195:[function(require,module,exports){
-arguments[4][20][0].apply(exports,arguments)
-},{"./lang":200,"./promise":202,"dup":20,"rxjs/Observable":337,"rxjs/Subject":340,"rxjs/observable/PromiseObservable":358,"rxjs/operator/toPromise":370}],196:[function(require,module,exports){
-arguments[4][21][0].apply(exports,arguments)
-},{"dup":21}],197:[function(require,module,exports){
-arguments[4][22][0].apply(exports,arguments)
-},{"./lang":200,"dup":22}],198:[function(require,module,exports){
-arguments[4][23][0].apply(exports,arguments)
-},{"./base_wrapped_exception":196,"./collection":197,"./lang":200,"dup":23}],199:[function(require,module,exports){
+},{"../facade/collection":201,"../facade/lang":204,"../reflection/reflection":236,"./forward_ref":189,"./metadata":191,"./provider":193,"./provider_util":194,"./reflective_exceptions":195,"./reflective_key":197}],199:[function(require,module,exports){
 arguments[4][24][0].apply(exports,arguments)
-},{"./base_wrapped_exception":196,"./exception_handler":198,"dup":24}],200:[function(require,module,exports){
+},{"./lang":204,"./promise":206,"dup":24,"rxjs/Observable":365,"rxjs/Subject":368,"rxjs/observable/PromiseObservable":396,"rxjs/operator/toPromise":416}],200:[function(require,module,exports){
+arguments[4][25][0].apply(exports,arguments)
+},{"dup":25}],201:[function(require,module,exports){
+arguments[4][26][0].apply(exports,arguments)
+},{"./lang":204,"dup":26}],202:[function(require,module,exports){
+arguments[4][27][0].apply(exports,arguments)
+},{"./base_wrapped_exception":200,"./collection":201,"./lang":204,"dup":27}],203:[function(require,module,exports){
+arguments[4][28][0].apply(exports,arguments)
+},{"./base_wrapped_exception":200,"./exception_handler":202,"dup":28}],204:[function(require,module,exports){
 (function (global){
 /**
  * @license
@@ -30497,11 +30733,11 @@ exports.escapeRegExp = escapeRegExp;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 
-},{}],201:[function(require,module,exports){
-arguments[4][98][0].apply(exports,arguments)
-},{"./lang":200,"dup":98}],202:[function(require,module,exports){
-arguments[4][27][0].apply(exports,arguments)
-},{"dup":27}],203:[function(require,module,exports){
+},{}],205:[function(require,module,exports){
+arguments[4][102][0].apply(exports,arguments)
+},{"./lang":204,"dup":102}],206:[function(require,module,exports){
+arguments[4][31][0].apply(exports,arguments)
+},{"dup":31}],207:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -30540,7 +30776,7 @@ var view_ref_1 = require('./linker/view_ref');
 exports.EmbeddedViewRef = view_ref_1.EmbeddedViewRef;
 exports.ViewRef = view_ref_1.ViewRef;
 
-},{"./linker/compiler":204,"./linker/component_factory":205,"./linker/component_factory_resolver":206,"./linker/component_resolver":207,"./linker/dynamic_component_loader":209,"./linker/element_ref":212,"./linker/exceptions":213,"./linker/query_list":214,"./linker/systemjs_component_resolver":215,"./linker/template_ref":216,"./linker/view_container_ref":218,"./linker/view_ref":219}],204:[function(require,module,exports){
+},{"./linker/compiler":208,"./linker/component_factory":209,"./linker/component_factory_resolver":210,"./linker/component_resolver":211,"./linker/dynamic_component_loader":213,"./linker/element_ref":216,"./linker/exceptions":217,"./linker/query_list":218,"./linker/systemjs_component_resolver":219,"./linker/template_ref":220,"./linker/view_container_ref":222,"./linker/view_ref":223}],208:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -30585,7 +30821,7 @@ var Compiler = (function () {
 }());
 exports.Compiler = Compiler;
 
-},{"../facade/exceptions":199,"../facade/lang":200}],205:[function(require,module,exports){
+},{"../facade/exceptions":203,"../facade/lang":204}],209:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -30749,7 +30985,7 @@ var ComponentFactory = (function () {
 }());
 exports.ComponentFactory = ComponentFactory;
 
-},{"../facade/exceptions":199,"../facade/lang":200,"./view_utils":221}],206:[function(require,module,exports){
+},{"../facade/exceptions":203,"../facade/lang":204,"./view_utils":225}],210:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -30815,7 +31051,7 @@ var CodegenComponentFactoryResolver = (function () {
 }());
 exports.CodegenComponentFactoryResolver = CodegenComponentFactoryResolver;
 
-},{"../facade/exceptions":199,"../facade/lang":200}],207:[function(require,module,exports){
+},{"../facade/exceptions":203,"../facade/lang":204}],211:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -30874,7 +31110,7 @@ var ReflectorComponentResolver = (function (_super) {
 }(ComponentResolver));
 exports.ReflectorComponentResolver = ReflectorComponentResolver;
 
-},{"../di/decorators":184,"../facade/async":195,"../facade/exceptions":199,"../facade/lang":200,"../reflection/reflection":232,"./component_factory":205}],208:[function(require,module,exports){
+},{"../di/decorators":188,"../facade/async":199,"../facade/exceptions":203,"../facade/lang":204,"../reflection/reflection":236,"./component_factory":209}],212:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -31000,7 +31236,7 @@ var DebugContext = (function () {
 }());
 exports.DebugContext = DebugContext;
 
-},{"../facade/collection":197,"../facade/lang":200,"./view_type":220}],209:[function(require,module,exports){
+},{"../facade/collection":201,"../facade/lang":204,"./view_type":224}],213:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -31067,7 +31303,7 @@ var DynamicComponentLoader_ = (function (_super) {
 }(DynamicComponentLoader));
 exports.DynamicComponentLoader_ = DynamicComponentLoader_;
 
-},{"../di/decorators":184,"../di/reflective_injector":192,"../facade/lang":200,"./component_resolver":207}],210:[function(require,module,exports){
+},{"../di/decorators":188,"../di/reflective_injector":196,"../facade/lang":204,"./component_resolver":211}],214:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -31168,7 +31404,7 @@ var AppElement = (function () {
 }());
 exports.AppElement = AppElement;
 
-},{"../facade/collection":197,"../facade/exceptions":199,"../facade/lang":200,"./element_ref":212,"./view_container_ref":218,"./view_type":220}],211:[function(require,module,exports){
+},{"../facade/collection":201,"../facade/exceptions":203,"../facade/lang":204,"./element_ref":216,"./view_container_ref":222,"./view_type":224}],215:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -31206,7 +31442,7 @@ var ElementInjector = (function (_super) {
 }(injector_1.Injector));
 exports.ElementInjector = ElementInjector;
 
-},{"../di/injector":186}],212:[function(require,module,exports){
+},{"../di/injector":190}],216:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -31238,7 +31474,7 @@ var ElementRef = (function () {
 }());
 exports.ElementRef = ElementRef;
 
-},{}],213:[function(require,module,exports){
+},{}],217:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -31328,7 +31564,7 @@ var ViewDestroyedException = (function (_super) {
 }(exceptions_1.BaseException));
 exports.ViewDestroyedException = ViewDestroyedException;
 
-},{"../facade/exceptions":199}],214:[function(require,module,exports){
+},{"../facade/exceptions":203}],218:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -31440,7 +31676,7 @@ var QueryList = (function () {
 }());
 exports.QueryList = QueryList;
 
-},{"../facade/async":195,"../facade/collection":197,"../facade/lang":200}],215:[function(require,module,exports){
+},{"../facade/async":199,"../facade/collection":201,"../facade/lang":204}],219:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -31500,7 +31736,7 @@ var SystemJsCmpFactoryResolver = (function () {
 }());
 exports.SystemJsCmpFactoryResolver = SystemJsCmpFactoryResolver;
 
-},{"../facade/lang":200}],216:[function(require,module,exports){
+},{"../facade/lang":204}],220:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -31576,7 +31812,7 @@ var TemplateRef_ = (function (_super) {
 }(TemplateRef));
 exports.TemplateRef_ = TemplateRef_;
 
-},{"../facade/lang":200}],217:[function(require,module,exports){
+},{"../facade/lang":204}],221:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -31983,7 +32219,7 @@ function _findLastRenderNode(node) {
     return lastNode;
 }
 
-},{"../animation/active_animation_players_map":158,"../animation/animation_group_player":161,"../change_detection/change_detection":172,"../facade/async":195,"../facade/collection":197,"../facade/lang":200,"../profile/profile":229,"./debug_context":208,"./element":210,"./element_injector":211,"./exceptions":213,"./view_ref":219,"./view_type":220,"./view_utils":221}],218:[function(require,module,exports){
+},{"../animation/active_animation_players_map":162,"../animation/animation_group_player":165,"../change_detection/change_detection":176,"../facade/async":199,"../facade/collection":201,"../facade/lang":204,"../profile/profile":233,"./debug_context":212,"./element":214,"./element_injector":215,"./exceptions":217,"./view_ref":223,"./view_type":224,"./view_utils":225}],222:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -32145,7 +32381,7 @@ var ViewContainerRef_ = (function () {
 }());
 exports.ViewContainerRef_ = ViewContainerRef_;
 
-},{"../facade/collection":197,"../facade/exceptions":199,"../facade/lang":200,"../profile/profile":229}],219:[function(require,module,exports){
+},{"../facade/collection":201,"../facade/exceptions":203,"../facade/lang":204,"../profile/profile":233}],223:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -32288,7 +32524,7 @@ var ViewRef_ = (function () {
 }());
 exports.ViewRef_ = ViewRef_;
 
-},{"../change_detection/constants":175,"../facade/exceptions":199}],220:[function(require,module,exports){
+},{"../change_detection/constants":179,"../facade/exceptions":203}],224:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -32310,7 +32546,7 @@ exports.ViewRef_ = ViewRef_;
 })(exports.ViewType || (exports.ViewType = {}));
 var ViewType = exports.ViewType;
 
-},{}],221:[function(require,module,exports){
+},{}],225:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -32672,7 +32908,7 @@ function pureProxy10(fn) {
 }
 exports.pureProxy10 = pureProxy10;
 
-},{"../application_tokens":170,"../change_detection/change_detection":172,"../change_detection/change_detection_util":173,"../di/decorators":184,"../facade/collection":197,"../facade/exceptions":199,"../facade/lang":200,"../render/api":237,"../security":238,"./element":210,"./exceptions":213}],222:[function(require,module,exports){
+},{"../application_tokens":174,"../change_detection/change_detection":176,"../change_detection/change_detection_util":177,"../di/decorators":188,"../facade/collection":201,"../facade/exceptions":203,"../facade/lang":204,"../render/api":241,"../security":242,"./element":214,"./exceptions":217}],226:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -33718,7 +33954,7 @@ exports.HostBinding = decorators_1.makePropDecorator(directives_1.HostBindingMet
  */
 exports.HostListener = decorators_1.makePropDecorator(directives_1.HostListenerMetadata);
 
-},{"./metadata/di":223,"./metadata/directives":224,"./metadata/lifecycle_hooks":225,"./metadata/view":226,"./util/decorators":241}],223:[function(require,module,exports){
+},{"./metadata/di":227,"./metadata/directives":228,"./metadata/lifecycle_hooks":229,"./metadata/view":230,"./util/decorators":245}],227:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -34221,7 +34457,7 @@ var ViewChildMetadata = (function (_super) {
 }(ViewQueryMetadata));
 exports.ViewChildMetadata = ViewChildMetadata;
 
-},{"../di/forward_ref":185,"../di/metadata":187,"../facade/lang":200}],224:[function(require,module,exports){
+},{"../di/forward_ref":189,"../di/metadata":191,"../facade/lang":204}],228:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -35123,7 +35359,7 @@ var HostListenerMetadata = (function () {
 }());
 exports.HostListenerMetadata = HostListenerMetadata;
 
-},{"../change_detection/constants":175,"../di/metadata":187,"../facade/lang":200}],225:[function(require,module,exports){
+},{"../change_detection/constants":179,"../di/metadata":191,"../facade/lang":204}],229:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -35643,7 +35879,7 @@ var AfterViewChecked = (function () {
 }());
 exports.AfterViewChecked = AfterViewChecked;
 
-},{}],226:[function(require,module,exports){
+},{}],230:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -35731,7 +35967,7 @@ var ViewMetadata = (function () {
 }());
 exports.ViewMetadata = ViewMetadata;
 
-},{}],227:[function(require,module,exports){
+},{}],231:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -35760,7 +35996,7 @@ exports.PLATFORM_COMMON_PROVIDERS = [
     console_1.Console
 ];
 
-},{"./application_ref":169,"./console":180,"./reflection/reflection":232,"./reflection/reflector_reader":235,"./testability/testability":239}],228:[function(require,module,exports){
+},{"./application_ref":173,"./console":184,"./reflection/reflection":236,"./reflection/reflector_reader":239,"./testability/testability":243}],232:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -35824,7 +36060,7 @@ exports.PLATFORM_DIRECTIVES =
   */
 exports.PLATFORM_PIPES = new di_1.OpaqueToken('Platform Pipes');
 
-},{"./di":183}],229:[function(require,module,exports){
+},{"./di":187}],233:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -35905,7 +36141,7 @@ exports.wtfStartTimeRange = exports.wtfEnabled ? wtf_impl_1.startTimeRange : fun
  */
 exports.wtfEndTimeRange = exports.wtfEnabled ? wtf_impl_1.endTimeRange : function (r) { return null; };
 
-},{"./wtf_impl":230}],230:[function(require,module,exports){
+},{"./wtf_impl":234}],234:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -35948,7 +36184,7 @@ function endTimeRange(range) {
 }
 exports.endTimeRange = endTimeRange;
 
-},{"../facade/lang":200}],231:[function(require,module,exports){
+},{"../facade/lang":204}],235:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -35963,7 +36199,7 @@ exports.endTimeRange = endTimeRange;
 function wtfInit() { }
 exports.wtfInit = wtfInit;
 
-},{}],232:[function(require,module,exports){
+},{}],236:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -35983,7 +36219,7 @@ exports.Reflector = reflector_2.Reflector;
  */
 exports.reflector = new reflector_1.Reflector(new reflection_capabilities_1.ReflectionCapabilities());
 
-},{"./reflection_capabilities":233,"./reflector":234}],233:[function(require,module,exports){
+},{"./reflection_capabilities":237,"./reflector":238}],237:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -36222,7 +36458,7 @@ function convertTsickleDecoratorIntoMetadata(decoratorInvocations) {
     });
 }
 
-},{"../facade/lang":200}],234:[function(require,module,exports){
+},{"../facade/lang":204}],238:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -36397,7 +36633,7 @@ function _mergeMaps(target, config) {
     collection_1.StringMapWrapper.forEach(config, function (v, k) { return target.set(k, v); });
 }
 
-},{"../facade/collection":197,"../facade/exceptions":199,"../facade/lang":200,"./reflector_reader":235}],235:[function(require,module,exports){
+},{"../facade/collection":201,"../facade/exceptions":203,"../facade/lang":204,"./reflector_reader":239}],239:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -36417,7 +36653,7 @@ var ReflectorReader = (function () {
 }());
 exports.ReflectorReader = ReflectorReader;
 
-},{}],236:[function(require,module,exports){
+},{}],240:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -36432,7 +36668,7 @@ exports.RenderComponentType = api_1.RenderComponentType;
 exports.Renderer = api_1.Renderer;
 exports.RootRenderer = api_1.RootRenderer;
 
-},{"./render/api":237}],237:[function(require,module,exports){
+},{"./render/api":241}],241:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -36521,7 +36757,7 @@ var RootRenderer = (function () {
 }());
 exports.RootRenderer = RootRenderer;
 
-},{"../facade/exceptions":199}],238:[function(require,module,exports){
+},{"../facade/exceptions":203}],242:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -36561,7 +36797,7 @@ var SanitizationService = (function () {
 }());
 exports.SanitizationService = SanitizationService;
 
-},{}],239:[function(require,module,exports){
+},{}],243:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -36713,7 +36949,7 @@ function setTestabilityGetter(getter) {
 exports.setTestabilityGetter = setTestabilityGetter;
 var _testabilityGetter = new _NoopGetTestability();
 
-},{"../di/decorators":184,"../facade/async":195,"../facade/collection":197,"../facade/exceptions":199,"../facade/lang":200,"../zone/ng_zone":243}],240:[function(require,module,exports){
+},{"../di/decorators":188,"../facade/async":199,"../facade/collection":201,"../facade/exceptions":203,"../facade/lang":204,"../zone/ng_zone":247}],244:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -36726,7 +36962,7 @@ var _testabilityGetter = new _NoopGetTestability();
 var decorators_1 = require('./util/decorators');
 exports.Class = decorators_1.Class;
 
-},{"./util/decorators":241}],241:[function(require,module,exports){
+},{"./util/decorators":245}],245:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -36993,7 +37229,7 @@ function makePropDecorator(annotationCls /** TODO #9100 */) {
 }
 exports.makePropDecorator = makePropDecorator;
 
-},{"../facade/lang":200}],242:[function(require,module,exports){
+},{"../facade/lang":204}],246:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -37007,7 +37243,7 @@ var ng_zone_1 = require('./zone/ng_zone');
 exports.NgZone = ng_zone_1.NgZone;
 exports.NgZoneError = ng_zone_1.NgZoneError;
 
-},{"./zone/ng_zone":243}],243:[function(require,module,exports){
+},{"./zone/ng_zone":247}],247:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -37265,7 +37501,7 @@ var NgZone = (function () {
 }());
 exports.NgZone = NgZone;
 
-},{"../facade/async":195,"../facade/exceptions":199,"./ng_zone_impl":244}],244:[function(require,module,exports){
+},{"../facade/async":199,"../facade/exceptions":203,"./ng_zone_impl":248}],248:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -37359,7 +37595,7 @@ var NgZoneImpl = (function () {
 }());
 exports.NgZoneImpl = NgZoneImpl;
 
-},{}],245:[function(require,module,exports){
+},{}],249:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -37368,181 +37604,1075 @@ exports.NgZoneImpl = NgZoneImpl;
  * found in the LICENSE file at https://angular.io/license
  */
 "use strict";
-var core_1 = require('@angular/core');
-exports.ReflectionCapabilities = core_1.__core_private__.ReflectionCapabilities;
-exports.reflector = core_1.__core_private__.reflector;
-
-},{"@angular/core":156}],246:[function(require,module,exports){
+var browser_jsonp_1 = require('./src/backends/browser_jsonp');
+var browser_xhr_1 = require('./src/backends/browser_xhr');
+var jsonp_backend_1 = require('./src/backends/jsonp_backend');
+var xhr_backend_1 = require('./src/backends/xhr_backend');
+var base_request_options_1 = require('./src/base_request_options');
+var base_response_options_1 = require('./src/base_response_options');
+var http_1 = require('./src/http');
+var interfaces_1 = require('./src/interfaces');
+var browser_xhr_2 = require('./src/backends/browser_xhr');
+exports.BrowserXhr = browser_xhr_2.BrowserXhr;
+var jsonp_backend_2 = require('./src/backends/jsonp_backend');
+exports.JSONPBackend = jsonp_backend_2.JSONPBackend;
+exports.JSONPConnection = jsonp_backend_2.JSONPConnection;
+var xhr_backend_2 = require('./src/backends/xhr_backend');
+exports.CookieXSRFStrategy = xhr_backend_2.CookieXSRFStrategy;
+exports.XHRBackend = xhr_backend_2.XHRBackend;
+exports.XHRConnection = xhr_backend_2.XHRConnection;
+var base_request_options_2 = require('./src/base_request_options');
+exports.BaseRequestOptions = base_request_options_2.BaseRequestOptions;
+exports.RequestOptions = base_request_options_2.RequestOptions;
+var base_response_options_2 = require('./src/base_response_options');
+exports.BaseResponseOptions = base_response_options_2.BaseResponseOptions;
+exports.ResponseOptions = base_response_options_2.ResponseOptions;
+var enums_1 = require('./src/enums');
+exports.ReadyState = enums_1.ReadyState;
+exports.RequestMethod = enums_1.RequestMethod;
+exports.ResponseType = enums_1.ResponseType;
+var headers_1 = require('./src/headers');
+exports.Headers = headers_1.Headers;
+var http_2 = require('./src/http');
+exports.Http = http_2.Http;
+exports.Jsonp = http_2.Jsonp;
+var interfaces_2 = require('./src/interfaces');
+exports.Connection = interfaces_2.Connection;
+exports.ConnectionBackend = interfaces_2.ConnectionBackend;
+exports.XSRFStrategy = interfaces_2.XSRFStrategy;
+var static_request_1 = require('./src/static_request');
+exports.Request = static_request_1.Request;
+var static_response_1 = require('./src/static_response');
+exports.Response = static_response_1.Response;
+var url_search_params_1 = require('./src/url_search_params');
+exports.QueryEncoder = url_search_params_1.QueryEncoder;
+exports.URLSearchParams = url_search_params_1.URLSearchParams;
 /**
- * @license
- * Copyright Google Inc. All Rights Reserved.
+ * Provides a basic set of injectables to use the {@link Http} service in any application.
  *
- * Use of this source code is governed by an MIT-style license that can be
- * found in the LICENSE file at https://angular.io/license
- */
-"use strict";
-var common_1 = require('@angular/common');
-var compiler_1 = require('@angular/compiler');
-var core_1 = require('@angular/core');
-var platform_browser_1 = require('@angular/platform-browser');
-var core_private_1 = require('./core_private');
-var async_1 = require('./src/facade/async');
-var lang_1 = require('./src/facade/lang');
-var xhr_cache_1 = require('./src/xhr/xhr_cache');
-var xhr_impl_1 = require('./src/xhr/xhr_impl');
-/**
- * @experimental
- */
-exports.BROWSER_APP_COMPILER_PROVIDERS = [
-    compiler_1.COMPILER_PROVIDERS, {
-        provide: compiler_1.CompilerConfig,
-        useFactory: function (platformDirectives, platformPipes) {
-            return new compiler_1.CompilerConfig({ platformDirectives: platformDirectives, platformPipes: platformPipes });
-        },
-        deps: [core_1.PLATFORM_DIRECTIVES, core_1.PLATFORM_PIPES]
-    },
-    { provide: compiler_1.XHR, useClass: xhr_impl_1.XHRImpl },
-    { provide: core_1.PLATFORM_DIRECTIVES, useValue: common_1.COMMON_DIRECTIVES, multi: true },
-    { provide: core_1.PLATFORM_PIPES, useValue: common_1.COMMON_PIPES, multi: true }
-];
-/**
- * @experimental
- */
-exports.CACHED_TEMPLATE_PROVIDER = [{ provide: compiler_1.XHR, useClass: xhr_cache_1.CachedXHR }];
-/**
- * Bootstrapping for Angular applications.
+ * The `HTTP_PROVIDERS` should be included either in a component's injector,
+ * or in the root injector when bootstrapping an application.
  *
- * You instantiate an Angular application by explicitly specifying a component to use
- * as the root component for your application via the `bootstrap()` method.
+ * ### Example ([live demo](http://plnkr.co/edit/snj7Nv?p=preview))
  *
- * ## Simple Example
+ * ```
+ * import {Component} from '@angular/core';
+ * import {bootstrap} from '@angular/platform-browser/browser';
+ * import {NgFor} from '@angular/common';
+ * import {HTTP_PROVIDERS, Http} from '@angular/http';
  *
- * Assuming this `index.html`:
+ * @Component({
+ *   selector: 'app',
+ *   providers: [HTTP_PROVIDERS],
+ *   template: `
+ *     <div>
+ *       <h1>People</h1>
+ *       <ul>
+ *         <li *ngFor="let person of people">
+ *           {{person.name}}
+ *         </li>
+ *       </ul>
+ *     </div>
+ *   `,
+ *   directives: [NgFor]
+ * })
+ * export class App {
+ *   people: Object[];
+ *   constructor(http:Http) {
+ *     http.get('people.json').subscribe(res => {
+ *       this.people = res.json();
+ *     });
+ *   }
+ *   active:boolean = false;
+ *   toggleActiveState() {
+ *     this.active = !this.active;
+ *   }
+ * }
  *
- * ```html
- * <html>
- *   <!-- load Angular script tags here. -->
- *   <body>
- *     <my-app>loading...</my-app>
- *   </body>
- * </html>
+ * bootstrap(App)
+ *   .catch(err => console.error(err));
  * ```
  *
- * An application is bootstrapped inside an existing browser DOM, typically `index.html`.
- * Unlike Angular 1, Angular 2 does not compile/process providers in `index.html`. This is
- * mainly for security reasons, as well as architectural changes in Angular 2. This means
- * that `index.html` can safely be processed using server-side technologies such as
- * providers. Bindings can thus use double-curly `{{ syntax }}` without collision from
- * Angular 2 component double-curly `{{ syntax }}`.
+ * The primary public API included in `HTTP_PROVIDERS` is the {@link Http} class.
+ * However, other providers required by `Http` are included,
+ * which may be beneficial to override in certain cases.
  *
- * We can use this script code:
+ * The providers included in `HTTP_PROVIDERS` include:
+ *  * {@link Http}
+ *  * {@link XHRBackend}
+ *  * {@link XSRFStrategy} - Bound to {@link CookieXSRFStrategy} class (see below)
+ *  * `BrowserXHR` - Private factory to create `XMLHttpRequest` instances
+ *  * {@link RequestOptions} - Bound to {@link BaseRequestOptions} class
+ *  * {@link ResponseOptions} - Bound to {@link BaseResponseOptions} class
  *
- * {@example core/ts/bootstrap/bootstrap.ts region='bootstrap'}
+ * There may be cases where it makes sense to extend the base request options,
+ * such as to add a search string to be appended to all URLs.
+ * To accomplish this, a new provider for {@link RequestOptions} should
+ * be added in the same injector as `HTTP_PROVIDERS`.
  *
- * When the app developer invokes `bootstrap()` with the root component `MyApp` as its
- * argument, Angular performs the following tasks:
+ * ### Example ([live demo](http://plnkr.co/edit/aCMEXi?p=preview))
  *
- *  1. It uses the component's `selector` property to locate the DOM element which needs
- *     to be upgraded into the angular component.
- *  2. It creates a new child injector (from the platform injector). Optionally, you can
- *     also override the injector configuration for an app by invoking `bootstrap` with the
- *     `componentInjectableBindings` argument.
- *  3. It creates a new `Zone` and connects it to the angular application's change detection
- *     domain instance.
- *  4. It creates an emulated or shadow DOM on the selected component's host element and loads the
- *     template into it.
- *  5. It instantiates the specified component.
- *  6. Finally, Angular performs change detection to apply the initial data providers for the
- *     application.
+ * ```
+ * import {provide} from '@angular/core';
+ * import {bootstrap} from '@angular/platform-browser/browser';
+ * import {HTTP_PROVIDERS, BaseRequestOptions, RequestOptions} from '@angular/http';
  *
+ * class MyOptions extends BaseRequestOptions {
+ *   search: string = 'coreTeam=true';
+ * }
  *
- * ## Bootstrapping Multiple Applications
+ * bootstrap(App, [HTTP_PROVIDERS, {provide: RequestOptions, useClass: MyOptions}])
+ *   .catch(err => console.error(err));
+ * ```
  *
- * When working within a browser window, there are many singleton resources: cookies, title,
- * location, and others. Angular services that represent these resources must likewise be
- * shared across all Angular applications that occupy the same browser window. For this
- * reason, Angular creates exactly one global platform object which stores all shared
- * services, and each angular application injector has the platform injector as its parent.
+ * Likewise, to use a mock backend for unit tests, the {@link XHRBackend}
+ * provider should be bound to {@link MockBackend}.
  *
- * Each application has its own private injector as well. When there are multiple
- * applications on a page, Angular treats each application injector's services as private
- * to that application.
+ * ### Example ([live demo](http://plnkr.co/edit/7LWALD?p=preview))
  *
- * ## API
+ * ```
+ * import {provide} from '@angular/core';
+ * import {bootstrap} from '@angular/platform-browser/browser';
+ * import {HTTP_PROVIDERS, Http, Response, XHRBackend} from '@angular/http';
+ * import {MockBackend} from '@angular/http/testing';
  *
- * - `appComponentType`: The root component which should act as the application. This is
- *   a reference to a `Type` which is annotated with `@Component(...)`.
- * - `customProviders`: An additional set of providers that can be added to the
- *   app injector to override default injection behavior.
+ * var people = [{name: 'Jeff'}, {name: 'Tobias'}];
  *
- * Returns a `Promise` of {@link ComponentRef}.
+ * var injector = Injector.resolveAndCreate([
+ *   HTTP_PROVIDERS,
+ *   MockBackend,
+ *   {provide: XHRBackend, useExisting: MockBackend}
+ * ]);
+ * var http = injector.get(Http);
+ * var backend = injector.get(MockBackend);
  *
- * @experimental This api cannot be used with the offline compiler and thus is still subject to
- * change.
- */
-function bootstrap(appComponentType, customProviders) {
-    core_private_1.reflector.reflectionCapabilities = new core_private_1.ReflectionCapabilities();
-    var providers = [
-        platform_browser_1.BROWSER_APP_PROVIDERS, exports.BROWSER_APP_COMPILER_PROVIDERS,
-        lang_1.isPresent(customProviders) ? customProviders : []
-    ];
-    var appInjector = core_1.ReflectiveInjector.resolveAndCreate(providers, platform_browser_1.browserPlatform().injector);
-    return core_1.coreLoadAndBootstrap(appComponentType, appInjector);
-}
-exports.bootstrap = bootstrap;
-/**
+ * // Listen for any new requests
+ * backend.connections.observer({
+ *   next: connection => {
+ *     var response = new Response({body: people});
+ *     setTimeout(() => {
+ *       // Send a response to the request
+ *       connection.mockRespond(response);
+ *     });
+ *   }
+ * });
+ *
+ * http.get('people.json').observer({
+ *   next: res => {
+ *     // Response came from mock backend
+ *     console.log('first person', res.json()[0].name);
+ *   }
+ * });
+ * ```
+ *
+ * `XSRFStrategy` allows customizing how the application protects itself against Cross Site Request
+ * Forgery (XSRF) attacks. By default, Angular will look for a cookie called `'XSRF-TOKEN'`, and set
+ * an HTTP request header called `'X-XSRF-TOKEN'` with the value of the cookie on each request,
+ * allowing the server side to validate that the request comes from its own front end.
+ *
+ * Applications can override the names used by configuring a different `XSRFStrategy` instance. Most
+ * commonly, applications will configure a `CookieXSRFStrategy` with different cookie or header
+ * names, but if needed, they can supply a completely custom implementation.
+ *
+ * See the security documentation for more information.
+ *
+ * ### Example
+ *
+ * ```
+ * import {provide} from '@angular/core';
+ * import {bootstrap} from '@angular/platform-browser/browser';
+ * import {HTTP_PROVIDERS, XSRFStrategy, CookieXSRFStrategy} from '@angular/http';
+ *
+ * bootstrap(
+ *     App,
+ *     [HTTP_PROVIDERS, {provide: XSRFStrategy,
+ *         useValue: new CookieXSRFStrategy('MY-XSRF-COOKIE-NAME', 'X-MY-XSRF-HEADER-NAME')}])
+ *   .catch(err => console.error(err));
+ * ```
+ *
  * @experimental
  */
-function bootstrapWorkerUi(workerScriptUri, customProviders) {
-    var app = core_1.ReflectiveInjector.resolveAndCreate([
-        platform_browser_1.WORKER_UI_APPLICATION_PROVIDERS, exports.BROWSER_APP_COMPILER_PROVIDERS,
-        { provide: platform_browser_1.WORKER_SCRIPT, useValue: workerScriptUri },
-        lang_1.isPresent(customProviders) ? customProviders : []
-    ], platform_browser_1.workerUiPlatform().injector);
-    // Return a promise so that we keep the same semantics as Dart,
-    // and we might want to wait for the app side to come up
-    // in the future...
-    return async_1.PromiseWrapper.resolve(app.get(core_1.ApplicationRef));
-}
-exports.bootstrapWorkerUi = bootstrapWorkerUi;
-/**
- * @experimental
- */
-var WORKER_APP_COMPILER_PROVIDERS = [
-    compiler_1.COMPILER_PROVIDERS, {
-        provide: compiler_1.CompilerConfig,
-        useFactory: function (platformDirectives, platformPipes) {
-            return new compiler_1.CompilerConfig({ platformDirectives: platformDirectives, platformPipes: platformPipes });
-        },
-        deps: [core_1.PLATFORM_DIRECTIVES, core_1.PLATFORM_PIPES]
-    },
-    { provide: compiler_1.XHR, useClass: xhr_impl_1.XHRImpl },
-    { provide: core_1.PLATFORM_DIRECTIVES, useValue: common_1.COMMON_DIRECTIVES, multi: true },
-    { provide: core_1.PLATFORM_PIPES, useValue: common_1.COMMON_PIPES, multi: true }
+exports.HTTP_PROVIDERS = [
+    // TODO(pascal): use factory type annotations once supported in DI
+    // issue: https://github.com/angular/angular/issues/3183
+    { provide: http_1.Http, useFactory: httpFactory, deps: [xhr_backend_1.XHRBackend, base_request_options_1.RequestOptions] },
+    browser_xhr_1.BrowserXhr,
+    { provide: base_request_options_1.RequestOptions, useClass: base_request_options_1.BaseRequestOptions },
+    { provide: base_response_options_1.ResponseOptions, useClass: base_response_options_1.BaseResponseOptions },
+    xhr_backend_1.XHRBackend,
+    { provide: interfaces_1.XSRFStrategy, useValue: new xhr_backend_1.CookieXSRFStrategy() },
 ];
 /**
  * @experimental
  */
-function bootstrapWorkerApp(appComponentType, customProviders) {
-    var appInjector = core_1.ReflectiveInjector.resolveAndCreate([
-        platform_browser_1.WORKER_APP_APPLICATION_PROVIDERS, WORKER_APP_COMPILER_PROVIDERS,
-        lang_1.isPresent(customProviders) ? customProviders : []
-    ], platform_browser_1.workerAppPlatform().injector);
-    return core_1.coreLoadAndBootstrap(appComponentType, appInjector);
+function httpFactory(xhrBackend, requestOptions) {
+    return new http_1.Http(xhrBackend, requestOptions);
 }
-exports.bootstrapWorkerApp = bootstrapWorkerApp;
+exports.httpFactory = httpFactory;
+/**
+ * See {@link HTTP_PROVIDERS} instead.
+ *
+ * @deprecated
+ */
+exports.HTTP_BINDINGS = exports.HTTP_PROVIDERS;
+/**
+ * Provides a basic set of providers to use the {@link Jsonp} service in any application.
+ *
+ * The `JSONP_PROVIDERS` should be included either in a component's injector,
+ * or in the root injector when bootstrapping an application.
+ *
+ * ### Example ([live demo](http://plnkr.co/edit/vmeN4F?p=preview))
+ *
+ * ```
+ * import {Component} from '@angular/core';
+ * import {NgFor} from '@angular/common';
+ * import {JSONP_PROVIDERS, Jsonp} from '@angular/http';
+ *
+ * @Component({
+ *   selector: 'app',
+ *   providers: [JSONP_PROVIDERS],
+ *   template: `
+ *     <div>
+ *       <h1>People</h1>
+ *       <ul>
+ *         <li *ngFor="let person of people">
+ *           {{person.name}}
+ *         </li>
+ *       </ul>
+ *     </div>
+ *   `,
+ *   directives: [NgFor]
+ * })
+ * export class App {
+ *   people: Array<Object>;
+ *   constructor(jsonp:Jsonp) {
+ *     jsonp.request('people.json').subscribe(res => {
+ *       this.people = res.json();
+ *     })
+ *   }
+ * }
+ * ```
+ *
+ * The primary public API included in `JSONP_PROVIDERS` is the {@link Jsonp} class.
+ * However, other providers required by `Jsonp` are included,
+ * which may be beneficial to override in certain cases.
+ *
+ * The providers included in `JSONP_PROVIDERS` include:
+ *  * {@link Jsonp}
+ *  * {@link JSONPBackend}
+ *  * `BrowserJsonp` - Private factory
+ *  * {@link RequestOptions} - Bound to {@link BaseRequestOptions} class
+ *  * {@link ResponseOptions} - Bound to {@link BaseResponseOptions} class
+ *
+ * There may be cases where it makes sense to extend the base request options,
+ * such as to add a search string to be appended to all URLs.
+ * To accomplish this, a new provider for {@link RequestOptions} should
+ * be added in the same injector as `JSONP_PROVIDERS`.
+ *
+ * ### Example ([live demo](http://plnkr.co/edit/TFug7x?p=preview))
+ *
+ * ```
+ * import {provide} from '@angular/core';
+ * import {bootstrap} from '@angular/platform-browser/browser';
+ * import {JSONP_PROVIDERS, BaseRequestOptions, RequestOptions} from '@angular/http';
+ *
+ * class MyOptions extends BaseRequestOptions {
+ *   search: string = 'coreTeam=true';
+ * }
+ *
+ * bootstrap(App, [JSONP_PROVIDERS, {provide: RequestOptions, useClass: MyOptions}])
+ *   .catch(err => console.error(err));
+ * ```
+ *
+ * Likewise, to use a mock backend for unit tests, the {@link JSONPBackend}
+ * provider should be bound to {@link MockBackend}.
+ *
+ * ### Example ([live demo](http://plnkr.co/edit/HDqZWL?p=preview))
+ *
+ * ```
+ * import {provide, Injector} from '@angular/core';
+ * import {JSONP_PROVIDERS, Jsonp, Response, JSONPBackend} from '@angular/http';
+ * import {MockBackend} from '@angular/http/testing';
+ *
+ * var people = [{name: 'Jeff'}, {name: 'Tobias'}];
+ * var injector = Injector.resolveAndCreate([
+ *   JSONP_PROVIDERS,
+ *   MockBackend,
+ *   {provide: JSONPBackend, useExisting: MockBackend}
+ * ]);
+ * var jsonp = injector.get(Jsonp);
+ * var backend = injector.get(MockBackend);
+ *
+ * // Listen for any new requests
+ * backend.connections.observer({
+ *   next: connection => {
+ *     var response = new Response({body: people});
+ *     setTimeout(() => {
+ *       // Send a response to the request
+ *       connection.mockRespond(response);
+ *     });
+ *   }
+ * });
 
-},{"./core_private":245,"./src/facade/async":247,"./src/facade/lang":252,"./src/xhr/xhr_cache":254,"./src/xhr/xhr_impl":255,"@angular/common":9,"@angular/compiler":75,"@angular/core":156,"@angular/platform-browser":257}],247:[function(require,module,exports){
-arguments[4][20][0].apply(exports,arguments)
-},{"./lang":252,"./promise":253,"dup":20,"rxjs/Observable":337,"rxjs/Subject":340,"rxjs/observable/PromiseObservable":358,"rxjs/operator/toPromise":370}],248:[function(require,module,exports){
-arguments[4][21][0].apply(exports,arguments)
-},{"dup":21}],249:[function(require,module,exports){
-arguments[4][22][0].apply(exports,arguments)
-},{"./lang":252,"dup":22}],250:[function(require,module,exports){
-arguments[4][23][0].apply(exports,arguments)
-},{"./base_wrapped_exception":248,"./collection":249,"./lang":252,"dup":23}],251:[function(require,module,exports){
-arguments[4][24][0].apply(exports,arguments)
-},{"./base_wrapped_exception":248,"./exception_handler":250,"dup":24}],252:[function(require,module,exports){
+ * jsonp.get('people.json').observer({
+ *   next: res => {
+ *     // Response came from mock backend
+ *     console.log('first person', res.json()[0].name);
+ *   }
+ * });
+ * ```
+ *
+ * @experimental
+ */
+exports.JSONP_PROVIDERS = [
+    // TODO(pascal): use factory type annotations once supported in DI
+    // issue: https://github.com/angular/angular/issues/3183
+    { provide: http_1.Jsonp, useFactory: jsonpFactory, deps: [jsonp_backend_1.JSONPBackend, base_request_options_1.RequestOptions] },
+    browser_jsonp_1.BrowserJsonp,
+    { provide: base_request_options_1.RequestOptions, useClass: base_request_options_1.BaseRequestOptions },
+    { provide: base_response_options_1.ResponseOptions, useClass: base_response_options_1.BaseResponseOptions },
+    { provide: jsonp_backend_1.JSONPBackend, useClass: jsonp_backend_1.JSONPBackend_ },
+];
+function jsonpFactory(jsonpBackend, requestOptions) {
+    return new http_1.Jsonp(jsonpBackend, requestOptions);
+}
+/**
+ * See {@link JSONP_PROVIDERS} instead.
+ *
+ * @deprecated
+ */
+exports.JSON_BINDINGS = exports.JSONP_PROVIDERS;
+
+},{"./src/backends/browser_jsonp":251,"./src/backends/browser_xhr":252,"./src/backends/jsonp_backend":253,"./src/backends/xhr_backend":254,"./src/base_request_options":255,"./src/base_response_options":256,"./src/enums":257,"./src/headers":263,"./src/http":264,"./src/interfaces":266,"./src/static_request":267,"./src/static_response":268,"./src/url_search_params":269}],250:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+function __export(m) {
+    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
+}
+__export(require('./http'));
+
+},{"./http":249}],251:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var core_1 = require('@angular/core');
+var lang_1 = require('../facade/lang');
+var _nextRequestId = 0;
+exports.JSONP_HOME = '__ng_jsonp__';
+var _jsonpConnections = null;
+function _getJsonpConnections() {
+    if (_jsonpConnections === null) {
+        _jsonpConnections = lang_1.global[exports.JSONP_HOME] = {};
+    }
+    return _jsonpConnections;
+}
+var BrowserJsonp = (function () {
+    function BrowserJsonp() {
+    }
+    // Construct a <script> element with the specified URL
+    BrowserJsonp.prototype.build = function (url) {
+        var node = document.createElement('script');
+        node.src = url;
+        return node;
+    };
+    BrowserJsonp.prototype.nextRequestID = function () { return "__req" + _nextRequestId++; };
+    BrowserJsonp.prototype.requestCallback = function (id) { return exports.JSONP_HOME + "." + id + ".finished"; };
+    BrowserJsonp.prototype.exposeConnection = function (id, connection) {
+        var connections = _getJsonpConnections();
+        connections[id] = connection;
+    };
+    BrowserJsonp.prototype.removeConnection = function (id) {
+        var connections = _getJsonpConnections();
+        connections[id] = null;
+    };
+    // Attach the <script> element to the DOM
+    BrowserJsonp.prototype.send = function (node) { document.body.appendChild((node)); };
+    // Remove <script> element from the DOM
+    BrowserJsonp.prototype.cleanup = function (node) {
+        if (node.parentNode) {
+            node.parentNode.removeChild((node));
+        }
+    };
+    /** @nocollapse */
+    BrowserJsonp.decorators = [
+        { type: core_1.Injectable },
+    ];
+    return BrowserJsonp;
+}());
+exports.BrowserJsonp = BrowserJsonp;
+
+},{"../facade/lang":262,"@angular/core":160}],252:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var core_1 = require('@angular/core');
+var BrowserXhr = (function () {
+    function BrowserXhr() {
+    }
+    BrowserXhr.prototype.build = function () { return (new XMLHttpRequest()); };
+    /** @nocollapse */
+    BrowserXhr.decorators = [
+        { type: core_1.Injectable },
+    ];
+    /** @nocollapse */
+    BrowserXhr.ctorParameters = [];
+    return BrowserXhr;
+}());
+exports.BrowserXhr = BrowserXhr;
+
+},{"@angular/core":160}],253:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var core_1 = require('@angular/core');
+var Observable_1 = require('rxjs/Observable');
+var base_response_options_1 = require('../base_response_options');
+var enums_1 = require('../enums');
+var exceptions_1 = require('../facade/exceptions');
+var lang_1 = require('../facade/lang');
+var interfaces_1 = require('../interfaces');
+var static_response_1 = require('../static_response');
+var browser_jsonp_1 = require('./browser_jsonp');
+var JSONP_ERR_NO_CALLBACK = 'JSONP injected script did not invoke callback.';
+var JSONP_ERR_WRONG_METHOD = 'JSONP requests must use GET request method.';
+/**
+ * Abstract base class for an in-flight JSONP request.
+ *
+ * @experimental
+ */
+var JSONPConnection = (function () {
+    function JSONPConnection() {
+    }
+    return JSONPConnection;
+}());
+exports.JSONPConnection = JSONPConnection;
+var JSONPConnection_ = (function (_super) {
+    __extends(JSONPConnection_, _super);
+    function JSONPConnection_(req, _dom, baseResponseOptions) {
+        var _this = this;
+        _super.call(this);
+        this._dom = _dom;
+        this.baseResponseOptions = baseResponseOptions;
+        this._finished = false;
+        if (req.method !== enums_1.RequestMethod.Get) {
+            throw exceptions_1.makeTypeError(JSONP_ERR_WRONG_METHOD);
+        }
+        this.request = req;
+        this.response = new Observable_1.Observable(function (responseObserver) {
+            _this.readyState = enums_1.ReadyState.Loading;
+            var id = _this._id = _dom.nextRequestID();
+            _dom.exposeConnection(id, _this);
+            // Workaround Dart
+            // url = url.replace(/=JSONP_CALLBACK(&|$)/, `generated method`);
+            var callback = _dom.requestCallback(_this._id);
+            var url = req.url;
+            if (url.indexOf('=JSONP_CALLBACK&') > -1) {
+                url = lang_1.StringWrapper.replace(url, '=JSONP_CALLBACK&', "=" + callback + "&");
+            }
+            else if (url.lastIndexOf('=JSONP_CALLBACK') === url.length - '=JSONP_CALLBACK'.length) {
+                url = url.substring(0, url.length - '=JSONP_CALLBACK'.length) + ("=" + callback);
+            }
+            var script = _this._script = _dom.build(url);
+            var onLoad = function (event) {
+                if (_this.readyState === enums_1.ReadyState.Cancelled)
+                    return;
+                _this.readyState = enums_1.ReadyState.Done;
+                _dom.cleanup(script);
+                if (!_this._finished) {
+                    var responseOptions_1 = new base_response_options_1.ResponseOptions({ body: JSONP_ERR_NO_CALLBACK, type: enums_1.ResponseType.Error, url: url });
+                    if (lang_1.isPresent(baseResponseOptions)) {
+                        responseOptions_1 = baseResponseOptions.merge(responseOptions_1);
+                    }
+                    responseObserver.error(new static_response_1.Response(responseOptions_1));
+                    return;
+                }
+                var responseOptions = new base_response_options_1.ResponseOptions({ body: _this._responseData, url: url });
+                if (lang_1.isPresent(_this.baseResponseOptions)) {
+                    responseOptions = _this.baseResponseOptions.merge(responseOptions);
+                }
+                responseObserver.next(new static_response_1.Response(responseOptions));
+                responseObserver.complete();
+            };
+            var onError = function (error) {
+                if (_this.readyState === enums_1.ReadyState.Cancelled)
+                    return;
+                _this.readyState = enums_1.ReadyState.Done;
+                _dom.cleanup(script);
+                var responseOptions = new base_response_options_1.ResponseOptions({ body: error.message, type: enums_1.ResponseType.Error });
+                if (lang_1.isPresent(baseResponseOptions)) {
+                    responseOptions = baseResponseOptions.merge(responseOptions);
+                }
+                responseObserver.error(new static_response_1.Response(responseOptions));
+            };
+            script.addEventListener('load', onLoad);
+            script.addEventListener('error', onError);
+            _dom.send(script);
+            return function () {
+                _this.readyState = enums_1.ReadyState.Cancelled;
+                script.removeEventListener('load', onLoad);
+                script.removeEventListener('error', onError);
+                if (lang_1.isPresent(script)) {
+                    _this._dom.cleanup(script);
+                }
+            };
+        });
+    }
+    JSONPConnection_.prototype.finished = function (data) {
+        // Don't leak connections
+        this._finished = true;
+        this._dom.removeConnection(this._id);
+        if (this.readyState === enums_1.ReadyState.Cancelled)
+            return;
+        this._responseData = data;
+    };
+    return JSONPConnection_;
+}(JSONPConnection));
+exports.JSONPConnection_ = JSONPConnection_;
+/**
+ * A {@link ConnectionBackend} that uses the JSONP strategy of making requests.
+ *
+ * @experimental
+ */
+var JSONPBackend = (function (_super) {
+    __extends(JSONPBackend, _super);
+    function JSONPBackend() {
+        _super.apply(this, arguments);
+    }
+    return JSONPBackend;
+}(interfaces_1.ConnectionBackend));
+exports.JSONPBackend = JSONPBackend;
+var JSONPBackend_ = (function (_super) {
+    __extends(JSONPBackend_, _super);
+    function JSONPBackend_(_browserJSONP, _baseResponseOptions) {
+        _super.call(this);
+        this._browserJSONP = _browserJSONP;
+        this._baseResponseOptions = _baseResponseOptions;
+    }
+    JSONPBackend_.prototype.createConnection = function (request) {
+        return new JSONPConnection_(request, this._browserJSONP, this._baseResponseOptions);
+    };
+    /** @nocollapse */
+    JSONPBackend_.decorators = [
+        { type: core_1.Injectable },
+    ];
+    /** @nocollapse */
+    JSONPBackend_.ctorParameters = [
+        { type: browser_jsonp_1.BrowserJsonp, },
+        { type: base_response_options_1.ResponseOptions, },
+    ];
+    return JSONPBackend_;
+}(JSONPBackend));
+exports.JSONPBackend_ = JSONPBackend_;
+
+},{"../base_response_options":256,"../enums":257,"../facade/exceptions":261,"../facade/lang":262,"../interfaces":266,"../static_response":268,"./browser_jsonp":251,"@angular/core":160,"rxjs/Observable":365}],254:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var core_1 = require('@angular/core');
+var platform_browser_1 = require('@angular/platform-browser');
+var Observable_1 = require('rxjs/Observable');
+var base_response_options_1 = require('../base_response_options');
+var enums_1 = require('../enums');
+var lang_1 = require('../facade/lang');
+var headers_1 = require('../headers');
+var http_utils_1 = require('../http_utils');
+var interfaces_1 = require('../interfaces');
+var static_response_1 = require('../static_response');
+var browser_xhr_1 = require('./browser_xhr');
+var XSSI_PREFIX = /^\)\]\}',?\n/;
+/**
+ * Creates connections using `XMLHttpRequest`. Given a fully-qualified
+ * request, an `XHRConnection` will immediately create an `XMLHttpRequest` object and send the
+ * request.
+ *
+ * This class would typically not be created or interacted with directly inside applications, though
+ * the {@link MockConnection} may be interacted with in tests.
+ *
+ * @experimental
+ */
+var XHRConnection = (function () {
+    function XHRConnection(req, browserXHR, baseResponseOptions) {
+        var _this = this;
+        this.request = req;
+        this.response = new Observable_1.Observable(function (responseObserver) {
+            var _xhr = browserXHR.build();
+            _xhr.open(enums_1.RequestMethod[req.method].toUpperCase(), req.url);
+            if (lang_1.isPresent(req.withCredentials)) {
+                _xhr.withCredentials = req.withCredentials;
+            }
+            // load event handler
+            var onLoad = function () {
+                // responseText is the old-school way of retrieving response (supported by IE8 & 9)
+                // response/responseType properties were introduced in XHR Level2 spec (supported by
+                // IE10)
+                var body = lang_1.isPresent(_xhr.response) ? _xhr.response : _xhr.responseText;
+                // Implicitly strip a potential XSSI prefix.
+                if (lang_1.isString(body))
+                    body = body.replace(XSSI_PREFIX, '');
+                var headers = headers_1.Headers.fromResponseHeaderString(_xhr.getAllResponseHeaders());
+                var url = http_utils_1.getResponseURL(_xhr);
+                // normalize IE9 bug (http://bugs.jquery.com/ticket/1450)
+                var status = _xhr.status === 1223 ? 204 : _xhr.status;
+                // fix status code when it is 0 (0 status is undocumented).
+                // Occurs when accessing file resources or on Android 4.1 stock browser
+                // while retrieving files from application cache.
+                if (status === 0) {
+                    status = body ? 200 : 0;
+                }
+                var statusText = _xhr.statusText || 'OK';
+                var responseOptions = new base_response_options_1.ResponseOptions({ body: body, status: status, headers: headers, statusText: statusText, url: url });
+                if (lang_1.isPresent(baseResponseOptions)) {
+                    responseOptions = baseResponseOptions.merge(responseOptions);
+                }
+                var response = new static_response_1.Response(responseOptions);
+                response.ok = http_utils_1.isSuccess(status);
+                if (response.ok) {
+                    responseObserver.next(response);
+                    // TODO(gdi2290): defer complete if array buffer until done
+                    responseObserver.complete();
+                    return;
+                }
+                responseObserver.error(response);
+            };
+            // error event handler
+            var onError = function (err) {
+                var responseOptions = new base_response_options_1.ResponseOptions({
+                    body: err,
+                    type: enums_1.ResponseType.Error,
+                    status: _xhr.status,
+                    statusText: _xhr.statusText,
+                });
+                if (lang_1.isPresent(baseResponseOptions)) {
+                    responseOptions = baseResponseOptions.merge(responseOptions);
+                }
+                responseObserver.error(new static_response_1.Response(responseOptions));
+            };
+            _this.setDetectedContentType(req, _xhr);
+            if (lang_1.isPresent(req.headers)) {
+                req.headers.forEach(function (values, name) { return _xhr.setRequestHeader(name, values.join(',')); });
+            }
+            _xhr.addEventListener('load', onLoad);
+            _xhr.addEventListener('error', onError);
+            _xhr.send(_this.request.getBody());
+            return function () {
+                _xhr.removeEventListener('load', onLoad);
+                _xhr.removeEventListener('error', onError);
+                _xhr.abort();
+            };
+        });
+    }
+    XHRConnection.prototype.setDetectedContentType = function (req /** TODO #9100 */, _xhr /** TODO #9100 */) {
+        // Skip if a custom Content-Type header is provided
+        if (lang_1.isPresent(req.headers) && lang_1.isPresent(req.headers.get('Content-Type'))) {
+            return;
+        }
+        // Set the detected content type
+        switch (req.contentType) {
+            case enums_1.ContentType.NONE:
+                break;
+            case enums_1.ContentType.JSON:
+                _xhr.setRequestHeader('Content-Type', 'application/json');
+                break;
+            case enums_1.ContentType.FORM:
+                _xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded;charset=UTF-8');
+                break;
+            case enums_1.ContentType.TEXT:
+                _xhr.setRequestHeader('Content-Type', 'text/plain');
+                break;
+            case enums_1.ContentType.BLOB:
+                var blob = req.blob();
+                if (blob.type) {
+                    _xhr.setRequestHeader('Content-Type', blob.type);
+                }
+                break;
+        }
+    };
+    return XHRConnection;
+}());
+exports.XHRConnection = XHRConnection;
+/**
+ * `XSRFConfiguration` sets up Cross Site Request Forgery (XSRF) protection for the application
+ * using a cookie. See https://www.owasp.org/index.php/Cross-Site_Request_Forgery_(CSRF) for more
+ * information on XSRF.
+ *
+ * Applications can configure custom cookie and header names by binding an instance of this class
+ * with different `cookieName` and `headerName` values. See the main HTTP documentation for more
+ * details.
+ *
+ * @experimental
+ */
+var CookieXSRFStrategy = (function () {
+    function CookieXSRFStrategy(_cookieName, _headerName) {
+        if (_cookieName === void 0) { _cookieName = 'XSRF-TOKEN'; }
+        if (_headerName === void 0) { _headerName = 'X-XSRF-TOKEN'; }
+        this._cookieName = _cookieName;
+        this._headerName = _headerName;
+    }
+    CookieXSRFStrategy.prototype.configureRequest = function (req) {
+        var xsrfToken = platform_browser_1.__platform_browser_private__.getDOM().getCookie(this._cookieName);
+        if (xsrfToken && !req.headers.has(this._headerName)) {
+            req.headers.set(this._headerName, xsrfToken);
+        }
+    };
+    return CookieXSRFStrategy;
+}());
+exports.CookieXSRFStrategy = CookieXSRFStrategy;
+var XHRBackend = (function () {
+    function XHRBackend(_browserXHR, _baseResponseOptions, _xsrfStrategy) {
+        this._browserXHR = _browserXHR;
+        this._baseResponseOptions = _baseResponseOptions;
+        this._xsrfStrategy = _xsrfStrategy;
+    }
+    XHRBackend.prototype.createConnection = function (request) {
+        this._xsrfStrategy.configureRequest(request);
+        return new XHRConnection(request, this._browserXHR, this._baseResponseOptions);
+    };
+    /** @nocollapse */
+    XHRBackend.decorators = [
+        { type: core_1.Injectable },
+    ];
+    /** @nocollapse */
+    XHRBackend.ctorParameters = [
+        { type: browser_xhr_1.BrowserXhr, },
+        { type: base_response_options_1.ResponseOptions, },
+        { type: interfaces_1.XSRFStrategy, },
+    ];
+    return XHRBackend;
+}());
+exports.XHRBackend = XHRBackend;
+
+},{"../base_response_options":256,"../enums":257,"../facade/lang":262,"../headers":263,"../http_utils":265,"../interfaces":266,"../static_response":268,"./browser_xhr":252,"@angular/core":160,"@angular/platform-browser":282,"rxjs/Observable":365}],255:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var core_1 = require('@angular/core');
+var lang_1 = require('../src/facade/lang');
+var enums_1 = require('./enums');
+var headers_1 = require('./headers');
+var http_utils_1 = require('./http_utils');
+var url_search_params_1 = require('./url_search_params');
+/**
+ * Creates a request options object to be optionally provided when instantiating a
+ * {@link Request}.
+ *
+ * This class is based on the `RequestInit` description in the [Fetch
+ * Spec](https://fetch.spec.whatwg.org/#requestinit).
+ *
+ * All values are null by default. Typical defaults can be found in the {@link BaseRequestOptions}
+ * class, which sub-classes `RequestOptions`.
+ *
+ * ### Example ([live demo](http://plnkr.co/edit/7Wvi3lfLq41aQPKlxB4O?p=preview))
+ *
+ * ```typescript
+ * import {RequestOptions, Request, RequestMethod} from '@angular/http';
+ *
+ * var options = new RequestOptions({
+ *   method: RequestMethod.Post,
+ *   url: 'https://google.com'
+ * });
+ * var req = new Request(options);
+ * console.log('req.method:', RequestMethod[req.method]); // Post
+ * console.log('options.url:', options.url); // https://google.com
+ * ```
+ *
+ * @experimental
+ */
+var RequestOptions = (function () {
+    function RequestOptions(_a) {
+        var _b = _a === void 0 ? {} : _a, method = _b.method, headers = _b.headers, body = _b.body, url = _b.url, search = _b.search, withCredentials = _b.withCredentials;
+        this.method = lang_1.isPresent(method) ? http_utils_1.normalizeMethodName(method) : null;
+        this.headers = lang_1.isPresent(headers) ? headers : null;
+        this.body = lang_1.isPresent(body) ? body : null;
+        this.url = lang_1.isPresent(url) ? url : null;
+        this.search = lang_1.isPresent(search) ?
+            (lang_1.isString(search) ? new url_search_params_1.URLSearchParams((search)) : (search)) :
+            null;
+        this.withCredentials = lang_1.isPresent(withCredentials) ? withCredentials : null;
+    }
+    /**
+     * Creates a copy of the `RequestOptions` instance, using the optional input as values to override
+     * existing values. This method will not change the values of the instance on which it is being
+     * called.
+     *
+     * Note that `headers` and `search` will override existing values completely if present in
+     * the `options` object. If these values should be merged, it should be done prior to calling
+     * `merge` on the `RequestOptions` instance.
+     *
+     * ### Example ([live demo](http://plnkr.co/edit/6w8XA8YTkDRcPYpdB9dk?p=preview))
+     *
+     * ```typescript
+     * import {RequestOptions, Request, RequestMethod} from '@angular/http';
+     *
+     * var options = new RequestOptions({
+     *   method: RequestMethod.Post
+     * });
+     * var req = new Request(options.merge({
+     *   url: 'https://google.com'
+     * }));
+     * console.log('req.method:', RequestMethod[req.method]); // Post
+     * console.log('options.url:', options.url); // null
+     * console.log('req.url:', req.url); // https://google.com
+     * ```
+     */
+    RequestOptions.prototype.merge = function (options) {
+        return new RequestOptions({
+            method: lang_1.isPresent(options) && lang_1.isPresent(options.method) ? options.method : this.method,
+            headers: lang_1.isPresent(options) && lang_1.isPresent(options.headers) ? options.headers : this.headers,
+            body: lang_1.isPresent(options) && lang_1.isPresent(options.body) ? options.body : this.body,
+            url: lang_1.isPresent(options) && lang_1.isPresent(options.url) ? options.url : this.url,
+            search: lang_1.isPresent(options) && lang_1.isPresent(options.search) ?
+                (lang_1.isString(options.search) ? new url_search_params_1.URLSearchParams((options.search)) :
+                    (options.search).clone()) :
+                this.search,
+            withCredentials: lang_1.isPresent(options) && lang_1.isPresent(options.withCredentials) ?
+                options.withCredentials :
+                this.withCredentials
+        });
+    };
+    return RequestOptions;
+}());
+exports.RequestOptions = RequestOptions;
+var BaseRequestOptions = (function (_super) {
+    __extends(BaseRequestOptions, _super);
+    function BaseRequestOptions() {
+        _super.call(this, { method: enums_1.RequestMethod.Get, headers: new headers_1.Headers() });
+    }
+    /** @nocollapse */
+    BaseRequestOptions.decorators = [
+        { type: core_1.Injectable },
+    ];
+    /** @nocollapse */
+    BaseRequestOptions.ctorParameters = [];
+    return BaseRequestOptions;
+}(RequestOptions));
+exports.BaseRequestOptions = BaseRequestOptions;
+
+},{"../src/facade/lang":262,"./enums":257,"./headers":263,"./http_utils":265,"./url_search_params":269,"@angular/core":160}],256:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var core_1 = require('@angular/core');
+var lang_1 = require('../src/facade/lang');
+var enums_1 = require('./enums');
+var headers_1 = require('./headers');
+/**
+ * Creates a response options object to be optionally provided when instantiating a
+ * {@link Response}.
+ *
+ * This class is based on the `ResponseInit` description in the [Fetch
+ * Spec](https://fetch.spec.whatwg.org/#responseinit).
+ *
+ * All values are null by default. Typical defaults can be found in the
+ * {@link BaseResponseOptions} class, which sub-classes `ResponseOptions`.
+ *
+ * This class may be used in tests to build {@link Response Responses} for
+ * mock responses (see {@link MockBackend}).
+ *
+ * ### Example ([live demo](http://plnkr.co/edit/P9Jkk8e8cz6NVzbcxEsD?p=preview))
+ *
+ * ```typescript
+ * import {ResponseOptions, Response} from '@angular/http';
+ *
+ * var options = new ResponseOptions({
+ *   body: '{"name":"Jeff"}'
+ * });
+ * var res = new Response(options);
+ *
+ * console.log('res.json():', res.json()); // Object {name: "Jeff"}
+ * ```
+ *
+ * @experimental
+ */
+var ResponseOptions = (function () {
+    function ResponseOptions(_a) {
+        var _b = _a === void 0 ? {} : _a, body = _b.body, status = _b.status, headers = _b.headers, statusText = _b.statusText, type = _b.type, url = _b.url;
+        this.body = lang_1.isPresent(body) ? body : null;
+        this.status = lang_1.isPresent(status) ? status : null;
+        this.headers = lang_1.isPresent(headers) ? headers : null;
+        this.statusText = lang_1.isPresent(statusText) ? statusText : null;
+        this.type = lang_1.isPresent(type) ? type : null;
+        this.url = lang_1.isPresent(url) ? url : null;
+    }
+    /**
+     * Creates a copy of the `ResponseOptions` instance, using the optional input as values to
+     * override
+     * existing values. This method will not change the values of the instance on which it is being
+     * called.
+     *
+     * This may be useful when sharing a base `ResponseOptions` object inside tests,
+     * where certain properties may change from test to test.
+     *
+     * ### Example ([live demo](http://plnkr.co/edit/1lXquqFfgduTFBWjNoRE?p=preview))
+     *
+     * ```typescript
+     * import {ResponseOptions, Response} from '@angular/http';
+     *
+     * var options = new ResponseOptions({
+     *   body: {name: 'Jeff'}
+     * });
+     * var res = new Response(options.merge({
+     *   url: 'https://google.com'
+     * }));
+     * console.log('options.url:', options.url); // null
+     * console.log('res.json():', res.json()); // Object {name: "Jeff"}
+     * console.log('res.url:', res.url); // https://google.com
+     * ```
+     */
+    ResponseOptions.prototype.merge = function (options) {
+        return new ResponseOptions({
+            body: lang_1.isPresent(options) && lang_1.isPresent(options.body) ? options.body : this.body,
+            status: lang_1.isPresent(options) && lang_1.isPresent(options.status) ? options.status : this.status,
+            headers: lang_1.isPresent(options) && lang_1.isPresent(options.headers) ? options.headers : this.headers,
+            statusText: lang_1.isPresent(options) && lang_1.isPresent(options.statusText) ? options.statusText :
+                this.statusText,
+            type: lang_1.isPresent(options) && lang_1.isPresent(options.type) ? options.type : this.type,
+            url: lang_1.isPresent(options) && lang_1.isPresent(options.url) ? options.url : this.url,
+        });
+    };
+    return ResponseOptions;
+}());
+exports.ResponseOptions = ResponseOptions;
+var BaseResponseOptions = (function (_super) {
+    __extends(BaseResponseOptions, _super);
+    function BaseResponseOptions() {
+        _super.call(this, { status: 200, statusText: 'Ok', type: enums_1.ResponseType.Default, headers: new headers_1.Headers() });
+    }
+    /** @nocollapse */
+    BaseResponseOptions.decorators = [
+        { type: core_1.Injectable },
+    ];
+    /** @nocollapse */
+    BaseResponseOptions.ctorParameters = [];
+    return BaseResponseOptions;
+}(ResponseOptions));
+exports.BaseResponseOptions = BaseResponseOptions;
+
+},{"../src/facade/lang":262,"./enums":257,"./headers":263,"@angular/core":160}],257:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+/**
+ * Supported http methods.
+ * @experimental
+ */
+(function (RequestMethod) {
+    RequestMethod[RequestMethod["Get"] = 0] = "Get";
+    RequestMethod[RequestMethod["Post"] = 1] = "Post";
+    RequestMethod[RequestMethod["Put"] = 2] = "Put";
+    RequestMethod[RequestMethod["Delete"] = 3] = "Delete";
+    RequestMethod[RequestMethod["Options"] = 4] = "Options";
+    RequestMethod[RequestMethod["Head"] = 5] = "Head";
+    RequestMethod[RequestMethod["Patch"] = 6] = "Patch";
+})(exports.RequestMethod || (exports.RequestMethod = {}));
+var RequestMethod = exports.RequestMethod;
+/**
+ * All possible states in which a connection can be, based on
+ * [States](http://www.w3.org/TR/XMLHttpRequest/#states) from the `XMLHttpRequest` spec, but with an
+ * additional "CANCELLED" state.
+ * @experimental
+ */
+(function (ReadyState) {
+    ReadyState[ReadyState["Unsent"] = 0] = "Unsent";
+    ReadyState[ReadyState["Open"] = 1] = "Open";
+    ReadyState[ReadyState["HeadersReceived"] = 2] = "HeadersReceived";
+    ReadyState[ReadyState["Loading"] = 3] = "Loading";
+    ReadyState[ReadyState["Done"] = 4] = "Done";
+    ReadyState[ReadyState["Cancelled"] = 5] = "Cancelled";
+})(exports.ReadyState || (exports.ReadyState = {}));
+var ReadyState = exports.ReadyState;
+/**
+ * Acceptable response types to be associated with a {@link Response}, based on
+ * [ResponseType](https://fetch.spec.whatwg.org/#responsetype) from the Fetch spec.
+ * @experimental
+ */
+(function (ResponseType) {
+    ResponseType[ResponseType["Basic"] = 0] = "Basic";
+    ResponseType[ResponseType["Cors"] = 1] = "Cors";
+    ResponseType[ResponseType["Default"] = 2] = "Default";
+    ResponseType[ResponseType["Error"] = 3] = "Error";
+    ResponseType[ResponseType["Opaque"] = 4] = "Opaque";
+})(exports.ResponseType || (exports.ResponseType = {}));
+var ResponseType = exports.ResponseType;
+/**
+ * Supported content type to be automatically associated with a {@link Request}.
+ * @experimental
+ */
+(function (ContentType) {
+    ContentType[ContentType["NONE"] = 0] = "NONE";
+    ContentType[ContentType["JSON"] = 1] = "JSON";
+    ContentType[ContentType["FORM"] = 2] = "FORM";
+    ContentType[ContentType["FORM_DATA"] = 3] = "FORM_DATA";
+    ContentType[ContentType["TEXT"] = 4] = "TEXT";
+    ContentType[ContentType["BLOB"] = 5] = "BLOB";
+    ContentType[ContentType["ARRAY_BUFFER"] = 6] = "ARRAY_BUFFER";
+})(exports.ContentType || (exports.ContentType = {}));
+var ContentType = exports.ContentType;
+
+},{}],258:[function(require,module,exports){
+arguments[4][25][0].apply(exports,arguments)
+},{"dup":25}],259:[function(require,module,exports){
+arguments[4][26][0].apply(exports,arguments)
+},{"./lang":262,"dup":26}],260:[function(require,module,exports){
+arguments[4][27][0].apply(exports,arguments)
+},{"./base_wrapped_exception":258,"./collection":259,"./lang":262,"dup":27}],261:[function(require,module,exports){
+arguments[4][28][0].apply(exports,arguments)
+},{"./base_wrapped_exception":258,"./exception_handler":260,"dup":28}],262:[function(require,module,exports){
 (function (global){
 /**
  * @license
@@ -38011,9 +39141,1494 @@ exports.escapeRegExp = escapeRegExp;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 
-},{}],253:[function(require,module,exports){
+},{}],263:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var exceptions_1 = require('../src/facade/exceptions');
+var lang_1 = require('../src/facade/lang');
+var collection_1 = require('../src/facade/collection');
+/**
+ * Polyfill for [Headers](https://developer.mozilla.org/en-US/docs/Web/API/Headers/Headers), as
+ * specified in the [Fetch Spec](https://fetch.spec.whatwg.org/#headers-class).
+ *
+ * The only known difference between this `Headers` implementation and the spec is the
+ * lack of an `entries` method.
+ *
+ * ### Example ([live demo](http://plnkr.co/edit/MTdwT6?p=preview))
+ *
+ * ```
+ * import {Headers} from '@angular/http';
+ *
+ * var firstHeaders = new Headers();
+ * firstHeaders.append('Content-Type', 'image/jpeg');
+ * console.log(firstHeaders.get('Content-Type')) //'image/jpeg'
+ *
+ * // Create headers from Plain Old JavaScript Object
+ * var secondHeaders = new Headers({
+ *   'X-My-Custom-Header': 'Angular'
+ * });
+ * console.log(secondHeaders.get('X-My-Custom-Header')); //'Angular'
+ *
+ * var thirdHeaders = new Headers(secondHeaders);
+ * console.log(thirdHeaders.get('X-My-Custom-Header')); //'Angular'
+ * ```
+ *
+ * @experimental
+ */
+var Headers = (function () {
+    function Headers(headers) {
+        var _this = this;
+        if (headers instanceof Headers) {
+            this._headersMap = headers._headersMap;
+            return;
+        }
+        this._headersMap = new collection_1.Map();
+        if (lang_1.isBlank(headers)) {
+            return;
+        }
+        // headers instanceof StringMap
+        collection_1.StringMapWrapper.forEach(headers, function (v, k) {
+            _this._headersMap.set(k, collection_1.isListLikeIterable(v) ? v : [v]);
+        });
+    }
+    /**
+     * Returns a new Headers instance from the given DOMString of Response Headers
+     */
+    Headers.fromResponseHeaderString = function (headersString) {
+        return headersString.trim()
+            .split('\n')
+            .map(function (val) { return val.split(':'); })
+            .map(function (_a) {
+            var key = _a[0], parts = _a.slice(1);
+            return ([key.trim(), parts.join(':').trim()]);
+        })
+            .reduce(function (headers, _a) {
+            var key = _a[0], value = _a[1];
+            return !headers.set(key, value) && headers;
+        }, new Headers());
+    };
+    /**
+     * Appends a header to existing list of header values for a given header name.
+     */
+    Headers.prototype.append = function (name, value) {
+        var mapName = this._headersMap.get(name);
+        var list = collection_1.isListLikeIterable(mapName) ? mapName : [];
+        list.push(value);
+        this._headersMap.set(name, list);
+    };
+    /**
+     * Deletes all header values for the given name.
+     */
+    Headers.prototype.delete = function (name) { this._headersMap.delete(name); };
+    Headers.prototype.forEach = function (fn) {
+        this._headersMap.forEach(fn);
+    };
+    /**
+     * Returns first header that matches given name.
+     */
+    Headers.prototype.get = function (header) { return collection_1.ListWrapper.first(this._headersMap.get(header)); };
+    /**
+     * Check for existence of header by given name.
+     */
+    Headers.prototype.has = function (header) { return this._headersMap.has(header); };
+    /**
+     * Provides names of set headers
+     */
+    Headers.prototype.keys = function () { return collection_1.MapWrapper.keys(this._headersMap); };
+    /**
+     * Sets or overrides header value for given name.
+     */
+    Headers.prototype.set = function (header, value) {
+        var list = [];
+        if (collection_1.isListLikeIterable(value)) {
+            var pushValue = value.join(',');
+            list.push(pushValue);
+        }
+        else {
+            list.push(value);
+        }
+        this._headersMap.set(header, list);
+    };
+    /**
+     * Returns values of all headers.
+     */
+    Headers.prototype.values = function () { return collection_1.MapWrapper.values(this._headersMap); };
+    /**
+     * Returns string of all headers.
+     */
+    Headers.prototype.toJSON = function () {
+        var serializableHeaders = {};
+        this._headersMap.forEach(function (values, name) {
+            var list = [];
+            collection_1.iterateListLike(values, function (val /** TODO #9100 */) { return list = collection_1.ListWrapper.concat(list, val.split(',')); });
+            serializableHeaders[name] = list;
+        });
+        return serializableHeaders;
+    };
+    /**
+     * Returns list of header values for a given name.
+     */
+    Headers.prototype.getAll = function (header) {
+        var headers = this._headersMap.get(header);
+        return collection_1.isListLikeIterable(headers) ? headers : [];
+    };
+    /**
+     * This method is not implemented.
+     */
+    Headers.prototype.entries = function () { throw new exceptions_1.BaseException('"entries" method is not implemented on Headers class'); };
+    return Headers;
+}());
+exports.Headers = Headers;
+
+},{"../src/facade/collection":259,"../src/facade/exceptions":261,"../src/facade/lang":262}],264:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var core_1 = require('@angular/core');
+var exceptions_1 = require('../src/facade/exceptions');
+var lang_1 = require('../src/facade/lang');
+var base_request_options_1 = require('./base_request_options');
+var enums_1 = require('./enums');
+var interfaces_1 = require('./interfaces');
+var static_request_1 = require('./static_request');
+function httpRequest(backend, request) {
+    return backend.createConnection(request).response;
+}
+function mergeOptions(defaultOpts, providedOpts, method, url) {
+    var newOptions = defaultOpts;
+    if (lang_1.isPresent(providedOpts)) {
+        // Hack so Dart can used named parameters
+        return newOptions.merge(new base_request_options_1.RequestOptions({
+            method: providedOpts.method || method,
+            url: providedOpts.url || url,
+            search: providedOpts.search,
+            headers: providedOpts.headers,
+            body: providedOpts.body,
+            withCredentials: providedOpts.withCredentials
+        }));
+    }
+    if (lang_1.isPresent(method)) {
+        return newOptions.merge(new base_request_options_1.RequestOptions({ method: method, url: url }));
+    }
+    else {
+        return newOptions.merge(new base_request_options_1.RequestOptions({ url: url }));
+    }
+}
+var Http = (function () {
+    function Http(_backend, _defaultOptions) {
+        this._backend = _backend;
+        this._defaultOptions = _defaultOptions;
+    }
+    /**
+     * Performs any type of http request. First argument is required, and can either be a url or
+     * a {@link Request} instance. If the first argument is a url, an optional {@link RequestOptions}
+     * object can be provided as the 2nd argument. The options object will be merged with the values
+     * of {@link BaseRequestOptions} before performing the request.
+     */
+    Http.prototype.request = function (url, options) {
+        var responseObservable;
+        if (lang_1.isString(url)) {
+            responseObservable = httpRequest(this._backend, new static_request_1.Request(mergeOptions(this._defaultOptions, options, enums_1.RequestMethod.Get, url)));
+        }
+        else if (url instanceof static_request_1.Request) {
+            responseObservable = httpRequest(this._backend, url);
+        }
+        else {
+            throw exceptions_1.makeTypeError('First argument must be a url string or Request instance.');
+        }
+        return responseObservable;
+    };
+    /**
+     * Performs a request with `get` http method.
+     */
+    Http.prototype.get = function (url, options) {
+        return httpRequest(this._backend, new static_request_1.Request(mergeOptions(this._defaultOptions, options, enums_1.RequestMethod.Get, url)));
+    };
+    /**
+     * Performs a request with `post` http method.
+     */
+    Http.prototype.post = function (url, body, options) {
+        return httpRequest(this._backend, new static_request_1.Request(mergeOptions(this._defaultOptions.merge(new base_request_options_1.RequestOptions({ body: body })), options, enums_1.RequestMethod.Post, url)));
+    };
+    /**
+     * Performs a request with `put` http method.
+     */
+    Http.prototype.put = function (url, body, options) {
+        return httpRequest(this._backend, new static_request_1.Request(mergeOptions(this._defaultOptions.merge(new base_request_options_1.RequestOptions({ body: body })), options, enums_1.RequestMethod.Put, url)));
+    };
+    /**
+     * Performs a request with `delete` http method.
+     */
+    Http.prototype.delete = function (url, options) {
+        return httpRequest(this._backend, new static_request_1.Request(mergeOptions(this._defaultOptions, options, enums_1.RequestMethod.Delete, url)));
+    };
+    /**
+     * Performs a request with `patch` http method.
+     */
+    Http.prototype.patch = function (url, body, options) {
+        return httpRequest(this._backend, new static_request_1.Request(mergeOptions(this._defaultOptions.merge(new base_request_options_1.RequestOptions({ body: body })), options, enums_1.RequestMethod.Patch, url)));
+    };
+    /**
+     * Performs a request with `head` http method.
+     */
+    Http.prototype.head = function (url, options) {
+        return httpRequest(this._backend, new static_request_1.Request(mergeOptions(this._defaultOptions, options, enums_1.RequestMethod.Head, url)));
+    };
+    /** @nocollapse */
+    Http.decorators = [
+        { type: core_1.Injectable },
+    ];
+    /** @nocollapse */
+    Http.ctorParameters = [
+        { type: interfaces_1.ConnectionBackend, },
+        { type: base_request_options_1.RequestOptions, },
+    ];
+    return Http;
+}());
+exports.Http = Http;
+var Jsonp = (function (_super) {
+    __extends(Jsonp, _super);
+    function Jsonp(backend, defaultOptions) {
+        _super.call(this, backend, defaultOptions);
+    }
+    /**
+     * Performs any type of http request. First argument is required, and can either be a url or
+     * a {@link Request} instance. If the first argument is a url, an optional {@link RequestOptions}
+     * object can be provided as the 2nd argument. The options object will be merged with the values
+     * of {@link BaseRequestOptions} before performing the request.
+     *
+     * @security Regular XHR is the safest alternative to JSONP for most applications, and is
+     * supported by all current browsers. Because JSONP creates a `<script>` element with
+     * contents retrieved from a remote source, attacker-controlled data introduced by an untrusted
+     * source could expose your application to XSS risks. Data exposed by JSONP may also be
+     * readable by malicious third-party websites. In addition, JSONP introduces potential risk for
+     * future security issues (e.g. content sniffing).  For more detail, see the
+     * [Security Guide](http://g.co/ng/security).
+     */
+    Jsonp.prototype.request = function (url, options) {
+        var responseObservable;
+        if (lang_1.isString(url)) {
+            url =
+                new static_request_1.Request(mergeOptions(this._defaultOptions, options, enums_1.RequestMethod.Get, url));
+        }
+        if (url instanceof static_request_1.Request) {
+            if (url.method !== enums_1.RequestMethod.Get) {
+                exceptions_1.makeTypeError('JSONP requests must use GET request method.');
+            }
+            responseObservable = httpRequest(this._backend, url);
+        }
+        else {
+            throw exceptions_1.makeTypeError('First argument must be a url string or Request instance.');
+        }
+        return responseObservable;
+    };
+    /** @nocollapse */
+    Jsonp.decorators = [
+        { type: core_1.Injectable },
+    ];
+    /** @nocollapse */
+    Jsonp.ctorParameters = [
+        { type: interfaces_1.ConnectionBackend, },
+        { type: base_request_options_1.RequestOptions, },
+    ];
+    return Jsonp;
+}(Http));
+exports.Jsonp = Jsonp;
+
+},{"../src/facade/exceptions":261,"../src/facade/lang":262,"./base_request_options":255,"./enums":257,"./interfaces":266,"./static_request":267,"@angular/core":160}],265:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var exceptions_1 = require('../src/facade/exceptions');
+var lang_1 = require('../src/facade/lang');
+var enums_1 = require('./enums');
+function normalizeMethodName(method) {
+    if (lang_1.isString(method)) {
+        var originalMethod = method;
+        method = method
+            .replace(/(\w)(\w*)/g, function (g0, g1, g2) { return g1.toUpperCase() + g2.toLowerCase(); });
+        method = enums_1.RequestMethod[method];
+        if (typeof method !== 'number')
+            throw exceptions_1.makeTypeError("Invalid request method. The method \"" + originalMethod + "\" is not supported.");
+    }
+    return method;
+}
+exports.normalizeMethodName = normalizeMethodName;
+exports.isSuccess = function (status) { return (status >= 200 && status < 300); };
+function getResponseURL(xhr) {
+    if ('responseURL' in xhr) {
+        return xhr.responseURL;
+    }
+    if (/^X-Request-URL:/m.test(xhr.getAllResponseHeaders())) {
+        return xhr.getResponseHeader('X-Request-URL');
+    }
+    return;
+}
+exports.getResponseURL = getResponseURL;
+var lang_2 = require('../src/facade/lang');
+exports.isJsObject = lang_2.isJsObject;
+
+},{"../src/facade/exceptions":261,"../src/facade/lang":262,"./enums":257}],266:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+/**
+ * Abstract class from which real backends are derived.
+ *
+ * The primary purpose of a `ConnectionBackend` is to create new connections to fulfill a given
+ * {@link Request}.
+ *
+ * @experimental
+ */
+var ConnectionBackend = (function () {
+    function ConnectionBackend() {
+    }
+    return ConnectionBackend;
+}());
+exports.ConnectionBackend = ConnectionBackend;
+/**
+ * Abstract class from which real connections are derived.
+ *
+ * @experimental
+ */
+var Connection = (function () {
+    function Connection() {
+    }
+    return Connection;
+}());
+exports.Connection = Connection;
+/**
+ * An XSRFStrategy configures XSRF protection (e.g. via headers) on an HTTP request.
+ *
+ * @experimental
+ */
+var XSRFStrategy = (function () {
+    function XSRFStrategy() {
+    }
+    return XSRFStrategy;
+}());
+exports.XSRFStrategy = XSRFStrategy;
+
+},{}],267:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var lang_1 = require('../src/facade/lang');
+var enums_1 = require('./enums');
+var headers_1 = require('./headers');
+var http_utils_1 = require('./http_utils');
+var url_search_params_1 = require('./url_search_params');
+// TODO(jeffbcross): properly implement body accessors
+/**
+ * Creates `Request` instances from provided values.
+ *
+ * The Request's interface is inspired by the Request constructor defined in the [Fetch
+ * Spec](https://fetch.spec.whatwg.org/#request-class),
+ * but is considered a static value whose body can be accessed many times. There are other
+ * differences in the implementation, but this is the most significant.
+ *
+ * `Request` instances are typically created by higher-level classes, like {@link Http} and
+ * {@link Jsonp}, but it may occasionally be useful to explicitly create `Request` instances.
+ * One such example is when creating services that wrap higher-level services, like {@link Http},
+ * where it may be useful to generate a `Request` with arbitrary headers and search params.
+ *
+ * ```typescript
+ * import {Injectable, Injector} from '@angular/core';
+ * import {HTTP_PROVIDERS, Http, Request, RequestMethod} from '@angular/http';
+ *
+ * @Injectable()
+ * class AutoAuthenticator {
+ *   constructor(public http:Http) {}
+ *   request(url:string) {
+ *     return this.http.request(new Request({
+ *       method: RequestMethod.Get,
+ *       url: url,
+ *       search: 'password=123'
+ *     }));
+ *   }
+ * }
+ *
+ * var injector = Injector.resolveAndCreate([HTTP_PROVIDERS, AutoAuthenticator]);
+ * var authenticator = injector.get(AutoAuthenticator);
+ * authenticator.request('people.json').subscribe(res => {
+ *   //URL should have included '?password=123'
+ *   console.log('people', res.json());
+ * });
+ * ```
+ *
+ * @experimental
+ */
+var Request = (function () {
+    function Request(requestOptions) {
+        // TODO: assert that url is present
+        var url = requestOptions.url;
+        this.url = requestOptions.url;
+        if (lang_1.isPresent(requestOptions.search)) {
+            var search = requestOptions.search.toString();
+            if (search.length > 0) {
+                var prefix = '?';
+                if (lang_1.StringWrapper.contains(this.url, '?')) {
+                    prefix = (this.url[this.url.length - 1] == '&') ? '' : '&';
+                }
+                // TODO: just delete search-query-looking string in url?
+                this.url = url + prefix + search;
+            }
+        }
+        this._body = requestOptions.body;
+        this.contentType = this.detectContentType();
+        this.method = http_utils_1.normalizeMethodName(requestOptions.method);
+        // TODO(jeffbcross): implement behavior
+        // Defaults to 'omit', consistent with browser
+        // TODO(jeffbcross): implement behavior
+        this.headers = new headers_1.Headers(requestOptions.headers);
+        this.withCredentials = requestOptions.withCredentials;
+    }
+    /**
+     * Returns the request's body as string, assuming that body exists. If body is undefined, return
+     * empty
+     * string.
+     */
+    Request.prototype.text = function () { return lang_1.isPresent(this._body) ? this._body.toString() : ''; };
+    /**
+     * Returns the request's body as JSON string, assuming that body exists. If body is undefined,
+     * return
+     * empty
+     * string.
+     */
+    Request.prototype.json = function () { return lang_1.isPresent(this._body) ? JSON.stringify(this._body) : ''; };
+    /**
+     * Returns the request's body as array buffer, assuming that body exists. If body is undefined,
+     * return
+     * null.
+     */
+    Request.prototype.arrayBuffer = function () {
+        if (this._body instanceof ArrayBuffer)
+            return this._body;
+        throw 'The request body isn\'t an array buffer';
+    };
+    /**
+     * Returns the request's body as blob, assuming that body exists. If body is undefined, return
+     * null.
+     */
+    Request.prototype.blob = function () {
+        if (this._body instanceof Blob)
+            return this._body;
+        if (this._body instanceof ArrayBuffer)
+            return new Blob([this._body]);
+        throw 'The request body isn\'t either a blob or an array buffer';
+    };
+    /**
+     * Returns the content type of request's body based on its type.
+     */
+    Request.prototype.detectContentType = function () {
+        if (this._body == null) {
+            return enums_1.ContentType.NONE;
+        }
+        else if (this._body instanceof url_search_params_1.URLSearchParams) {
+            return enums_1.ContentType.FORM;
+        }
+        else if (this._body instanceof FormData) {
+            return enums_1.ContentType.FORM_DATA;
+        }
+        else if (this._body instanceof Blob) {
+            return enums_1.ContentType.BLOB;
+        }
+        else if (this._body instanceof ArrayBuffer) {
+            return enums_1.ContentType.ARRAY_BUFFER;
+        }
+        else if (this._body && typeof this._body == 'object') {
+            return enums_1.ContentType.JSON;
+        }
+        else {
+            return enums_1.ContentType.TEXT;
+        }
+    };
+    /**
+     * Returns the request's body according to its type. If body is undefined, return
+     * null.
+     */
+    Request.prototype.getBody = function () {
+        switch (this.contentType) {
+            case enums_1.ContentType.JSON:
+                return this.json();
+            case enums_1.ContentType.FORM:
+                return this.text();
+            case enums_1.ContentType.FORM_DATA:
+                return this._body;
+            case enums_1.ContentType.TEXT:
+                return this.text();
+            case enums_1.ContentType.BLOB:
+                return this.blob();
+            case enums_1.ContentType.ARRAY_BUFFER:
+                return this.arrayBuffer();
+            default:
+                return null;
+        }
+    };
+    return Request;
+}());
+exports.Request = Request;
+var noop = function () { };
+var w = typeof window == 'object' ? window : noop;
+var FormData = w['FormData'] || noop;
+var Blob = w['Blob'] || noop;
+var ArrayBuffer = w['ArrayBuffer'] || noop;
+
+},{"../src/facade/lang":262,"./enums":257,"./headers":263,"./http_utils":265,"./url_search_params":269}],268:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var exceptions_1 = require('../src/facade/exceptions');
+var lang_1 = require('../src/facade/lang');
+var http_utils_1 = require('./http_utils');
+/**
+ * Creates `Response` instances from provided values.
+ *
+ * Though this object isn't
+ * usually instantiated by end-users, it is the primary object interacted with when it comes time to
+ * add data to a view.
+ *
+ * ### Example
+ *
+ * ```
+ * http.request('my-friends.txt').subscribe(response => this.friends = response.text());
+ * ```
+ *
+ * The Response's interface is inspired by the Response constructor defined in the [Fetch
+ * Spec](https://fetch.spec.whatwg.org/#response-class), but is considered a static value whose body
+ * can be accessed many times. There are other differences in the implementation, but this is the
+ * most significant.
+ *
+ * @experimental
+ */
+var Response = (function () {
+    function Response(responseOptions) {
+        this._body = responseOptions.body;
+        this.status = responseOptions.status;
+        this.ok = (this.status >= 200 && this.status <= 299);
+        this.statusText = responseOptions.statusText;
+        this.headers = responseOptions.headers;
+        this.type = responseOptions.type;
+        this.url = responseOptions.url;
+    }
+    /**
+     * Not yet implemented
+     */
+    // TODO: Blob return type
+    Response.prototype.blob = function () { throw new exceptions_1.BaseException('"blob()" method not implemented on Response superclass'); };
+    /**
+     * Attempts to return body as parsed `JSON` object, or raises an exception.
+     */
+    Response.prototype.json = function () {
+        var jsonResponse;
+        if (http_utils_1.isJsObject(this._body)) {
+            jsonResponse = this._body;
+        }
+        else if (lang_1.isString(this._body)) {
+            jsonResponse = lang_1.Json.parse(this._body);
+        }
+        return jsonResponse;
+    };
+    /**
+     * Returns the body as a string, presuming `toString()` can be called on the response body.
+     */
+    Response.prototype.text = function () { return this._body.toString(); };
+    /**
+     * Not yet implemented
+     */
+    // TODO: ArrayBuffer return type
+    Response.prototype.arrayBuffer = function () {
+        throw new exceptions_1.BaseException('"arrayBuffer()" method not implemented on Response superclass');
+    };
+    Response.prototype.toString = function () {
+        return "Response with status: " + this.status + " " + this.statusText + " for URL: " + this.url;
+    };
+    return Response;
+}());
+exports.Response = Response;
+
+},{"../src/facade/exceptions":261,"../src/facade/lang":262,"./http_utils":265}],269:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var collection_1 = require('../src/facade/collection');
+var lang_1 = require('../src/facade/lang');
+function paramParser(rawParams) {
+    if (rawParams === void 0) { rawParams = ''; }
+    var map = new collection_1.Map();
+    if (rawParams.length > 0) {
+        var params = rawParams.split('&');
+        params.forEach(function (param) {
+            var split = param.split('=', 2);
+            var key = split[0];
+            var val = split[1];
+            var list = lang_1.isPresent(map.get(key)) ? map.get(key) : [];
+            list.push(val);
+            map.set(key, list);
+        });
+    }
+    return map;
+}
+/**
+ * @experimental
+ **/
+var QueryEncoder = (function () {
+    function QueryEncoder() {
+    }
+    QueryEncoder.prototype.encodeKey = function (k) { return standardEncoding(k); };
+    QueryEncoder.prototype.encodeValue = function (v) { return standardEncoding(v); };
+    return QueryEncoder;
+}());
+exports.QueryEncoder = QueryEncoder;
+function standardEncoding(v) {
+    return encodeURIComponent(v)
+        .replace(/%40/gi, '@')
+        .replace(/%3A/gi, ':')
+        .replace(/%24/gi, '$')
+        .replace(/%2C/gi, ',')
+        .replace(/%3B/gi, ';')
+        .replace(/%2B/gi, '+')
+        .replace(/%3D/gi, ';')
+        .replace(/%3F/gi, '?')
+        .replace(/%2F/gi, '/');
+}
+/**
+ * Map-like representation of url search parameters, based on
+ * [URLSearchParams](https://url.spec.whatwg.org/#urlsearchparams) in the url living standard,
+ * with several extensions for merging URLSearchParams objects:
+ *   - setAll()
+ *   - appendAll()
+ *   - replaceAll()
+ *
+ * This class accepts an optional second parameter of ${@link QueryEncoder},
+ * which is used to serialize parameters before making a request. By default,
+ * `QueryEncoder` encodes keys and values of parameters using `encodeURIComponent`,
+ * and then un-encodes certain characters that are allowed to be part of the query
+ * according to IETF RFC 3986: https://tools.ietf.org/html/rfc3986.
+ *
+ * These are the characters that are not encoded: `! $ \' ( ) * + , ; A 9 - . _ ~ ? /`
+ *
+ * If the set of allowed query characters is not acceptable for a particular backend,
+ * `QueryEncoder` can be subclassed and provided as the 2nd argument to URLSearchParams.
+ *
+ * ```
+ * import {URLSearchParams, QueryEncoder} from '@angular/http';
+ * class MyQueryEncoder extends QueryEncoder {
+ *   encodeKey(k: string): string {
+ *     return myEncodingFunction(k);
+ *   }
+ *
+ *   encodeValue(v: string): string {
+ *     return myEncodingFunction(v);
+ *   }
+ * }
+ *
+ * let params = new URLSearchParams('', new MyQueryEncoder());
+ * ```
+ * @experimental
+ */
+var URLSearchParams = (function () {
+    function URLSearchParams(rawParams, queryEncoder) {
+        if (rawParams === void 0) { rawParams = ''; }
+        if (queryEncoder === void 0) { queryEncoder = new QueryEncoder(); }
+        this.rawParams = rawParams;
+        this.queryEncoder = queryEncoder;
+        this.paramsMap = paramParser(rawParams);
+    }
+    URLSearchParams.prototype.clone = function () {
+        var clone = new URLSearchParams();
+        clone.appendAll(this);
+        return clone;
+    };
+    URLSearchParams.prototype.has = function (param) { return this.paramsMap.has(param); };
+    URLSearchParams.prototype.get = function (param) {
+        var storedParam = this.paramsMap.get(param);
+        if (collection_1.isListLikeIterable(storedParam)) {
+            return collection_1.ListWrapper.first(storedParam);
+        }
+        else {
+            return null;
+        }
+    };
+    URLSearchParams.prototype.getAll = function (param) {
+        var mapParam = this.paramsMap.get(param);
+        return lang_1.isPresent(mapParam) ? mapParam : [];
+    };
+    URLSearchParams.prototype.set = function (param, val) {
+        var mapParam = this.paramsMap.get(param);
+        var list = lang_1.isPresent(mapParam) ? mapParam : [];
+        collection_1.ListWrapper.clear(list);
+        list.push(val);
+        this.paramsMap.set(param, list);
+    };
+    // A merge operation
+    // For each name-values pair in `searchParams`, perform `set(name, values[0])`
+    //
+    // E.g: "a=[1,2,3], c=[8]" + "a=[4,5,6], b=[7]" = "a=[4], c=[8], b=[7]"
+    //
+    // TODO(@caitp): document this better
+    URLSearchParams.prototype.setAll = function (searchParams) {
+        var _this = this;
+        searchParams.paramsMap.forEach(function (value, param) {
+            var mapParam = _this.paramsMap.get(param);
+            var list = lang_1.isPresent(mapParam) ? mapParam : [];
+            collection_1.ListWrapper.clear(list);
+            list.push(value[0]);
+            _this.paramsMap.set(param, list);
+        });
+    };
+    URLSearchParams.prototype.append = function (param, val) {
+        var mapParam = this.paramsMap.get(param);
+        var list = lang_1.isPresent(mapParam) ? mapParam : [];
+        list.push(val);
+        this.paramsMap.set(param, list);
+    };
+    // A merge operation
+    // For each name-values pair in `searchParams`, perform `append(name, value)`
+    // for each value in `values`.
+    //
+    // E.g: "a=[1,2], c=[8]" + "a=[3,4], b=[7]" = "a=[1,2,3,4], c=[8], b=[7]"
+    //
+    // TODO(@caitp): document this better
+    URLSearchParams.prototype.appendAll = function (searchParams) {
+        var _this = this;
+        searchParams.paramsMap.forEach(function (value, param) {
+            var mapParam = _this.paramsMap.get(param);
+            var list = lang_1.isPresent(mapParam) ? mapParam : [];
+            for (var i = 0; i < value.length; ++i) {
+                list.push(value[i]);
+            }
+            _this.paramsMap.set(param, list);
+        });
+    };
+    // A merge operation
+    // For each name-values pair in `searchParams`, perform `delete(name)`,
+    // followed by `set(name, values)`
+    //
+    // E.g: "a=[1,2,3], c=[8]" + "a=[4,5,6], b=[7]" = "a=[4,5,6], c=[8], b=[7]"
+    //
+    // TODO(@caitp): document this better
+    URLSearchParams.prototype.replaceAll = function (searchParams) {
+        var _this = this;
+        searchParams.paramsMap.forEach(function (value, param) {
+            var mapParam = _this.paramsMap.get(param);
+            var list = lang_1.isPresent(mapParam) ? mapParam : [];
+            collection_1.ListWrapper.clear(list);
+            for (var i = 0; i < value.length; ++i) {
+                list.push(value[i]);
+            }
+            _this.paramsMap.set(param, list);
+        });
+    };
+    URLSearchParams.prototype.toString = function () {
+        var _this = this;
+        var paramsList = [];
+        this.paramsMap.forEach(function (values, k) {
+            values.forEach(function (v) { return paramsList.push(_this.queryEncoder.encodeKey(k) + '=' + _this.queryEncoder.encodeValue(v)); });
+        });
+        return paramsList.join('&');
+    };
+    URLSearchParams.prototype.delete = function (param) { this.paramsMap.delete(param); };
+    return URLSearchParams;
+}());
+exports.URLSearchParams = URLSearchParams;
+
+},{"../src/facade/collection":259,"../src/facade/lang":262}],270:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var core_1 = require('@angular/core');
+exports.ReflectionCapabilities = core_1.__core_private__.ReflectionCapabilities;
+exports.reflector = core_1.__core_private__.reflector;
+
+},{"@angular/core":160}],271:[function(require,module,exports){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var common_1 = require('@angular/common');
+var compiler_1 = require('@angular/compiler');
+var core_1 = require('@angular/core');
+var platform_browser_1 = require('@angular/platform-browser');
+var core_private_1 = require('./core_private');
+var async_1 = require('./src/facade/async');
+var lang_1 = require('./src/facade/lang');
+var xhr_cache_1 = require('./src/xhr/xhr_cache');
+var xhr_impl_1 = require('./src/xhr/xhr_impl');
+/**
+ * @experimental
+ */
+exports.BROWSER_APP_COMPILER_PROVIDERS = [
+    compiler_1.COMPILER_PROVIDERS, {
+        provide: compiler_1.CompilerConfig,
+        useFactory: function (platformDirectives, platformPipes) {
+            return new compiler_1.CompilerConfig({ platformDirectives: platformDirectives, platformPipes: platformPipes });
+        },
+        deps: [core_1.PLATFORM_DIRECTIVES, core_1.PLATFORM_PIPES]
+    },
+    { provide: compiler_1.XHR, useClass: xhr_impl_1.XHRImpl },
+    { provide: core_1.PLATFORM_DIRECTIVES, useValue: common_1.COMMON_DIRECTIVES, multi: true },
+    { provide: core_1.PLATFORM_PIPES, useValue: common_1.COMMON_PIPES, multi: true }
+];
+/**
+ * @experimental
+ */
+exports.CACHED_TEMPLATE_PROVIDER = [{ provide: compiler_1.XHR, useClass: xhr_cache_1.CachedXHR }];
+/**
+ * Bootstrapping for Angular applications.
+ *
+ * You instantiate an Angular application by explicitly specifying a component to use
+ * as the root component for your application via the `bootstrap()` method.
+ *
+ * ## Simple Example
+ *
+ * Assuming this `index.html`:
+ *
+ * ```html
+ * <html>
+ *   <!-- load Angular script tags here. -->
+ *   <body>
+ *     <my-app>loading...</my-app>
+ *   </body>
+ * </html>
+ * ```
+ *
+ * An application is bootstrapped inside an existing browser DOM, typically `index.html`.
+ * Unlike Angular 1, Angular 2 does not compile/process providers in `index.html`. This is
+ * mainly for security reasons, as well as architectural changes in Angular 2. This means
+ * that `index.html` can safely be processed using server-side technologies such as
+ * providers. Bindings can thus use double-curly `{{ syntax }}` without collision from
+ * Angular 2 component double-curly `{{ syntax }}`.
+ *
+ * We can use this script code:
+ *
+ * {@example core/ts/bootstrap/bootstrap.ts region='bootstrap'}
+ *
+ * When the app developer invokes `bootstrap()` with the root component `MyApp` as its
+ * argument, Angular performs the following tasks:
+ *
+ *  1. It uses the component's `selector` property to locate the DOM element which needs
+ *     to be upgraded into the angular component.
+ *  2. It creates a new child injector (from the platform injector). Optionally, you can
+ *     also override the injector configuration for an app by invoking `bootstrap` with the
+ *     `componentInjectableBindings` argument.
+ *  3. It creates a new `Zone` and connects it to the angular application's change detection
+ *     domain instance.
+ *  4. It creates an emulated or shadow DOM on the selected component's host element and loads the
+ *     template into it.
+ *  5. It instantiates the specified component.
+ *  6. Finally, Angular performs change detection to apply the initial data providers for the
+ *     application.
+ *
+ *
+ * ## Bootstrapping Multiple Applications
+ *
+ * When working within a browser window, there are many singleton resources: cookies, title,
+ * location, and others. Angular services that represent these resources must likewise be
+ * shared across all Angular applications that occupy the same browser window. For this
+ * reason, Angular creates exactly one global platform object which stores all shared
+ * services, and each angular application injector has the platform injector as its parent.
+ *
+ * Each application has its own private injector as well. When there are multiple
+ * applications on a page, Angular treats each application injector's services as private
+ * to that application.
+ *
+ * ## API
+ *
+ * - `appComponentType`: The root component which should act as the application. This is
+ *   a reference to a `Type` which is annotated with `@Component(...)`.
+ * - `customProviders`: An additional set of providers that can be added to the
+ *   app injector to override default injection behavior.
+ *
+ * Returns a `Promise` of {@link ComponentRef}.
+ *
+ * @experimental This api cannot be used with the offline compiler and thus is still subject to
+ * change.
+ */
+function bootstrap(appComponentType, customProviders) {
+    core_private_1.reflector.reflectionCapabilities = new core_private_1.ReflectionCapabilities();
+    var providers = [
+        platform_browser_1.BROWSER_APP_PROVIDERS, exports.BROWSER_APP_COMPILER_PROVIDERS,
+        lang_1.isPresent(customProviders) ? customProviders : []
+    ];
+    var appInjector = core_1.ReflectiveInjector.resolveAndCreate(providers, platform_browser_1.browserPlatform().injector);
+    return core_1.coreLoadAndBootstrap(appComponentType, appInjector);
+}
+exports.bootstrap = bootstrap;
+/**
+ * @experimental
+ */
+function bootstrapWorkerUi(workerScriptUri, customProviders) {
+    var app = core_1.ReflectiveInjector.resolveAndCreate([
+        platform_browser_1.WORKER_UI_APPLICATION_PROVIDERS, exports.BROWSER_APP_COMPILER_PROVIDERS,
+        { provide: platform_browser_1.WORKER_SCRIPT, useValue: workerScriptUri },
+        lang_1.isPresent(customProviders) ? customProviders : []
+    ], platform_browser_1.workerUiPlatform().injector);
+    // Return a promise so that we keep the same semantics as Dart,
+    // and we might want to wait for the app side to come up
+    // in the future...
+    return async_1.PromiseWrapper.resolve(app.get(core_1.ApplicationRef));
+}
+exports.bootstrapWorkerUi = bootstrapWorkerUi;
+/**
+ * @experimental
+ */
+var WORKER_APP_COMPILER_PROVIDERS = [
+    compiler_1.COMPILER_PROVIDERS, {
+        provide: compiler_1.CompilerConfig,
+        useFactory: function (platformDirectives, platformPipes) {
+            return new compiler_1.CompilerConfig({ platformDirectives: platformDirectives, platformPipes: platformPipes });
+        },
+        deps: [core_1.PLATFORM_DIRECTIVES, core_1.PLATFORM_PIPES]
+    },
+    { provide: compiler_1.XHR, useClass: xhr_impl_1.XHRImpl },
+    { provide: core_1.PLATFORM_DIRECTIVES, useValue: common_1.COMMON_DIRECTIVES, multi: true },
+    { provide: core_1.PLATFORM_PIPES, useValue: common_1.COMMON_PIPES, multi: true }
+];
+/**
+ * @experimental
+ */
+function bootstrapWorkerApp(appComponentType, customProviders) {
+    var appInjector = core_1.ReflectiveInjector.resolveAndCreate([
+        platform_browser_1.WORKER_APP_APPLICATION_PROVIDERS, WORKER_APP_COMPILER_PROVIDERS,
+        lang_1.isPresent(customProviders) ? customProviders : []
+    ], platform_browser_1.workerAppPlatform().injector);
+    return core_1.coreLoadAndBootstrap(appComponentType, appInjector);
+}
+exports.bootstrapWorkerApp = bootstrapWorkerApp;
+
+},{"./core_private":270,"./src/facade/async":272,"./src/facade/lang":277,"./src/xhr/xhr_cache":279,"./src/xhr/xhr_impl":280,"@angular/common":13,"@angular/compiler":79,"@angular/core":160,"@angular/platform-browser":282}],272:[function(require,module,exports){
+arguments[4][24][0].apply(exports,arguments)
+},{"./lang":277,"./promise":278,"dup":24,"rxjs/Observable":365,"rxjs/Subject":368,"rxjs/observable/PromiseObservable":396,"rxjs/operator/toPromise":416}],273:[function(require,module,exports){
+arguments[4][25][0].apply(exports,arguments)
+},{"dup":25}],274:[function(require,module,exports){
+arguments[4][26][0].apply(exports,arguments)
+},{"./lang":277,"dup":26}],275:[function(require,module,exports){
 arguments[4][27][0].apply(exports,arguments)
-},{"dup":27}],254:[function(require,module,exports){
+},{"./base_wrapped_exception":273,"./collection":274,"./lang":277,"dup":27}],276:[function(require,module,exports){
+arguments[4][28][0].apply(exports,arguments)
+},{"./base_wrapped_exception":273,"./exception_handler":275,"dup":28}],277:[function(require,module,exports){
+(function (global){
+/**
+ * @license
+ * Copyright Google Inc. All Rights Reserved.
+ *
+ * Use of this source code is governed by an MIT-style license that can be
+ * found in the LICENSE file at https://angular.io/license
+ */
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var globalScope;
+if (typeof window === 'undefined') {
+    if (typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope) {
+        // TODO: Replace any with WorkerGlobalScope from lib.webworker.d.ts #3492
+        globalScope = self;
+    }
+    else {
+        globalScope = global;
+    }
+}
+else {
+    globalScope = window;
+}
+function scheduleMicroTask(fn) {
+    Zone.current.scheduleMicroTask('scheduleMicrotask', fn);
+}
+exports.scheduleMicroTask = scheduleMicroTask;
+exports.IS_DART = false;
+// Need to declare a new variable for global here since TypeScript
+// exports the original value of the symbol.
+var _global = globalScope;
+exports.global = _global;
+/**
+ * Runtime representation a type that a Component or other object is instances of.
+ *
+ * An example of a `Type` is `MyCustomComponent` class, which in JavaScript is be represented by
+ * the `MyCustomComponent` constructor function.
+ *
+ * @stable
+ */
+exports.Type = Function;
+function getTypeNameForDebugging(type) {
+    if (type['name']) {
+        return type['name'];
+    }
+    return typeof type;
+}
+exports.getTypeNameForDebugging = getTypeNameForDebugging;
+exports.Math = _global.Math;
+exports.Date = _global.Date;
+// TODO: remove calls to assert in production environment
+// Note: Can't just export this and import in in other files
+// as `assert` is a reserved keyword in Dart
+_global.assert = function assert(condition) {
+    // TODO: to be fixed properly via #2830, noop for now
+};
+function isPresent(obj) {
+    return obj !== undefined && obj !== null;
+}
+exports.isPresent = isPresent;
+function isBlank(obj) {
+    return obj === undefined || obj === null;
+}
+exports.isBlank = isBlank;
+function isBoolean(obj) {
+    return typeof obj === 'boolean';
+}
+exports.isBoolean = isBoolean;
+function isNumber(obj) {
+    return typeof obj === 'number';
+}
+exports.isNumber = isNumber;
+function isString(obj) {
+    return typeof obj === 'string';
+}
+exports.isString = isString;
+function isFunction(obj) {
+    return typeof obj === 'function';
+}
+exports.isFunction = isFunction;
+function isType(obj) {
+    return isFunction(obj);
+}
+exports.isType = isType;
+function isStringMap(obj) {
+    return typeof obj === 'object' && obj !== null;
+}
+exports.isStringMap = isStringMap;
+var STRING_MAP_PROTO = Object.getPrototypeOf({});
+function isStrictStringMap(obj) {
+    return isStringMap(obj) && Object.getPrototypeOf(obj) === STRING_MAP_PROTO;
+}
+exports.isStrictStringMap = isStrictStringMap;
+function isPromise(obj) {
+    return obj instanceof _global.Promise;
+}
+exports.isPromise = isPromise;
+function isArray(obj) {
+    return Array.isArray(obj);
+}
+exports.isArray = isArray;
+function isDate(obj) {
+    return obj instanceof exports.Date && !isNaN(obj.valueOf());
+}
+exports.isDate = isDate;
+function noop() { }
+exports.noop = noop;
+function stringify(token) {
+    if (typeof token === 'string') {
+        return token;
+    }
+    if (token === undefined || token === null) {
+        return '' + token;
+    }
+    if (token.name) {
+        return token.name;
+    }
+    if (token.overriddenName) {
+        return token.overriddenName;
+    }
+    var res = token.toString();
+    var newLineIndex = res.indexOf('\n');
+    return (newLineIndex === -1) ? res : res.substring(0, newLineIndex);
+}
+exports.stringify = stringify;
+// serialize / deserialize enum exist only for consistency with dart API
+// enums in typescript don't need to be serialized
+function serializeEnum(val) {
+    return val;
+}
+exports.serializeEnum = serializeEnum;
+function deserializeEnum(val, values) {
+    return val;
+}
+exports.deserializeEnum = deserializeEnum;
+function resolveEnumToken(enumValue, val) {
+    return enumValue[val];
+}
+exports.resolveEnumToken = resolveEnumToken;
+var StringWrapper = (function () {
+    function StringWrapper() {
+    }
+    StringWrapper.fromCharCode = function (code) { return String.fromCharCode(code); };
+    StringWrapper.charCodeAt = function (s, index) { return s.charCodeAt(index); };
+    StringWrapper.split = function (s, regExp) { return s.split(regExp); };
+    StringWrapper.equals = function (s, s2) { return s === s2; };
+    StringWrapper.stripLeft = function (s, charVal) {
+        if (s && s.length) {
+            var pos = 0;
+            for (var i = 0; i < s.length; i++) {
+                if (s[i] != charVal)
+                    break;
+                pos++;
+            }
+            s = s.substring(pos);
+        }
+        return s;
+    };
+    StringWrapper.stripRight = function (s, charVal) {
+        if (s && s.length) {
+            var pos = s.length;
+            for (var i = s.length - 1; i >= 0; i--) {
+                if (s[i] != charVal)
+                    break;
+                pos--;
+            }
+            s = s.substring(0, pos);
+        }
+        return s;
+    };
+    StringWrapper.replace = function (s, from, replace) {
+        return s.replace(from, replace);
+    };
+    StringWrapper.replaceAll = function (s, from, replace) {
+        return s.replace(from, replace);
+    };
+    StringWrapper.slice = function (s, from, to) {
+        if (from === void 0) { from = 0; }
+        if (to === void 0) { to = null; }
+        return s.slice(from, to === null ? undefined : to);
+    };
+    StringWrapper.replaceAllMapped = function (s, from, cb) {
+        return s.replace(from, function () {
+            var matches = [];
+            for (var _i = 0; _i < arguments.length; _i++) {
+                matches[_i - 0] = arguments[_i];
+            }
+            // Remove offset & string from the result array
+            matches.splice(-2, 2);
+            // The callback receives match, p1, ..., pn
+            return cb(matches);
+        });
+    };
+    StringWrapper.contains = function (s, substr) { return s.indexOf(substr) != -1; };
+    StringWrapper.compare = function (a, b) {
+        if (a < b) {
+            return -1;
+        }
+        else if (a > b) {
+            return 1;
+        }
+        else {
+            return 0;
+        }
+    };
+    return StringWrapper;
+}());
+exports.StringWrapper = StringWrapper;
+var StringJoiner = (function () {
+    function StringJoiner(parts) {
+        if (parts === void 0) { parts = []; }
+        this.parts = parts;
+    }
+    StringJoiner.prototype.add = function (part) { this.parts.push(part); };
+    StringJoiner.prototype.toString = function () { return this.parts.join(''); };
+    return StringJoiner;
+}());
+exports.StringJoiner = StringJoiner;
+var NumberParseError = (function (_super) {
+    __extends(NumberParseError, _super);
+    function NumberParseError(message) {
+        _super.call(this);
+        this.message = message;
+    }
+    NumberParseError.prototype.toString = function () { return this.message; };
+    return NumberParseError;
+}(Error));
+exports.NumberParseError = NumberParseError;
+var NumberWrapper = (function () {
+    function NumberWrapper() {
+    }
+    NumberWrapper.toFixed = function (n, fractionDigits) { return n.toFixed(fractionDigits); };
+    NumberWrapper.equal = function (a, b) { return a === b; };
+    NumberWrapper.parseIntAutoRadix = function (text) {
+        var result = parseInt(text);
+        if (isNaN(result)) {
+            throw new NumberParseError('Invalid integer literal when parsing ' + text);
+        }
+        return result;
+    };
+    NumberWrapper.parseInt = function (text, radix) {
+        if (radix == 10) {
+            if (/^(\-|\+)?[0-9]+$/.test(text)) {
+                return parseInt(text, radix);
+            }
+        }
+        else if (radix == 16) {
+            if (/^(\-|\+)?[0-9ABCDEFabcdef]+$/.test(text)) {
+                return parseInt(text, radix);
+            }
+        }
+        else {
+            var result = parseInt(text, radix);
+            if (!isNaN(result)) {
+                return result;
+            }
+        }
+        throw new NumberParseError('Invalid integer literal when parsing ' + text + ' in base ' + radix);
+    };
+    // TODO: NaN is a valid literal but is returned by parseFloat to indicate an error.
+    NumberWrapper.parseFloat = function (text) { return parseFloat(text); };
+    Object.defineProperty(NumberWrapper, "NaN", {
+        get: function () { return NaN; },
+        enumerable: true,
+        configurable: true
+    });
+    NumberWrapper.isNumeric = function (value) { return !isNaN(value - parseFloat(value)); };
+    NumberWrapper.isNaN = function (value) { return isNaN(value); };
+    NumberWrapper.isInteger = function (value) { return Number.isInteger(value); };
+    return NumberWrapper;
+}());
+exports.NumberWrapper = NumberWrapper;
+exports.RegExp = _global.RegExp;
+var RegExpWrapper = (function () {
+    function RegExpWrapper() {
+    }
+    RegExpWrapper.create = function (regExpStr, flags) {
+        if (flags === void 0) { flags = ''; }
+        flags = flags.replace(/g/g, '');
+        return new _global.RegExp(regExpStr, flags + 'g');
+    };
+    RegExpWrapper.firstMatch = function (regExp, input) {
+        // Reset multimatch regex state
+        regExp.lastIndex = 0;
+        return regExp.exec(input);
+    };
+    RegExpWrapper.test = function (regExp, input) {
+        regExp.lastIndex = 0;
+        return regExp.test(input);
+    };
+    RegExpWrapper.matcher = function (regExp, input) {
+        // Reset regex state for the case
+        // someone did not loop over all matches
+        // last time.
+        regExp.lastIndex = 0;
+        return { re: regExp, input: input };
+    };
+    RegExpWrapper.replaceAll = function (regExp, input, replace) {
+        var c = regExp.exec(input);
+        var res = '';
+        regExp.lastIndex = 0;
+        var prev = 0;
+        while (c) {
+            res += input.substring(prev, c.index);
+            res += replace(c);
+            prev = c.index + c[0].length;
+            regExp.lastIndex = prev;
+            c = regExp.exec(input);
+        }
+        res += input.substring(prev);
+        return res;
+    };
+    return RegExpWrapper;
+}());
+exports.RegExpWrapper = RegExpWrapper;
+var RegExpMatcherWrapper = (function () {
+    function RegExpMatcherWrapper() {
+    }
+    RegExpMatcherWrapper.next = function (matcher) {
+        return matcher.re.exec(matcher.input);
+    };
+    return RegExpMatcherWrapper;
+}());
+exports.RegExpMatcherWrapper = RegExpMatcherWrapper;
+var FunctionWrapper = (function () {
+    function FunctionWrapper() {
+    }
+    FunctionWrapper.apply = function (fn, posArgs) { return fn.apply(null, posArgs); };
+    FunctionWrapper.bind = function (fn, scope) { return fn.bind(scope); };
+    return FunctionWrapper;
+}());
+exports.FunctionWrapper = FunctionWrapper;
+// JS has NaN !== NaN
+function looseIdentical(a, b) {
+    return a === b || typeof a === 'number' && typeof b === 'number' && isNaN(a) && isNaN(b);
+}
+exports.looseIdentical = looseIdentical;
+// JS considers NaN is the same as NaN for map Key (while NaN !== NaN otherwise)
+// see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map
+function getMapKey(value) {
+    return value;
+}
+exports.getMapKey = getMapKey;
+function normalizeBlank(obj) {
+    return isBlank(obj) ? null : obj;
+}
+exports.normalizeBlank = normalizeBlank;
+function normalizeBool(obj) {
+    return isBlank(obj) ? false : obj;
+}
+exports.normalizeBool = normalizeBool;
+function isJsObject(o) {
+    return o !== null && (typeof o === 'function' || typeof o === 'object');
+}
+exports.isJsObject = isJsObject;
+function print(obj) {
+    console.log(obj);
+}
+exports.print = print;
+function warn(obj) {
+    console.warn(obj);
+}
+exports.warn = warn;
+// Can't be all uppercase as our transpiler would think it is a special directive...
+var Json = (function () {
+    function Json() {
+    }
+    Json.parse = function (s) { return _global.JSON.parse(s); };
+    Json.stringify = function (data) {
+        // Dart doesn't take 3 arguments
+        return _global.JSON.stringify(data, null, 2);
+    };
+    return Json;
+}());
+exports.Json = Json;
+var DateWrapper = (function () {
+    function DateWrapper() {
+    }
+    DateWrapper.create = function (year, month, day, hour, minutes, seconds, milliseconds) {
+        if (month === void 0) { month = 1; }
+        if (day === void 0) { day = 1; }
+        if (hour === void 0) { hour = 0; }
+        if (minutes === void 0) { minutes = 0; }
+        if (seconds === void 0) { seconds = 0; }
+        if (milliseconds === void 0) { milliseconds = 0; }
+        return new exports.Date(year, month - 1, day, hour, minutes, seconds, milliseconds);
+    };
+    DateWrapper.fromISOString = function (str) { return new exports.Date(str); };
+    DateWrapper.fromMillis = function (ms) { return new exports.Date(ms); };
+    DateWrapper.toMillis = function (date) { return date.getTime(); };
+    DateWrapper.now = function () { return new exports.Date(); };
+    DateWrapper.toJson = function (date) { return date.toJSON(); };
+    return DateWrapper;
+}());
+exports.DateWrapper = DateWrapper;
+function setValueOnPath(global, path, value) {
+    var parts = path.split('.');
+    var obj = global;
+    while (parts.length > 1) {
+        var name = parts.shift();
+        if (obj.hasOwnProperty(name) && isPresent(obj[name])) {
+            obj = obj[name];
+        }
+        else {
+            obj = obj[name] = {};
+        }
+    }
+    if (obj === undefined || obj === null) {
+        obj = {};
+    }
+    obj[parts.shift()] = value;
+}
+exports.setValueOnPath = setValueOnPath;
+var _symbolIterator = null;
+function getSymbolIterator() {
+    if (isBlank(_symbolIterator)) {
+        if (isPresent(globalScope.Symbol) && isPresent(Symbol.iterator)) {
+            _symbolIterator = Symbol.iterator;
+        }
+        else {
+            // es6-shim specific logic
+            var keys = Object.getOwnPropertyNames(Map.prototype);
+            for (var i = 0; i < keys.length; ++i) {
+                var key = keys[i];
+                if (key !== 'entries' && key !== 'size' &&
+                    Map.prototype[key] === Map.prototype['entries']) {
+                    _symbolIterator = key;
+                }
+            }
+        }
+    }
+    return _symbolIterator;
+}
+exports.getSymbolIterator = getSymbolIterator;
+function evalExpression(sourceUrl, expr, declarations, vars) {
+    var fnBody = declarations + "\nreturn " + expr + "\n//# sourceURL=" + sourceUrl;
+    var fnArgNames = [];
+    var fnArgValues = [];
+    for (var argName in vars) {
+        fnArgNames.push(argName);
+        fnArgValues.push(vars[argName]);
+    }
+    return new (Function.bind.apply(Function, [void 0].concat(fnArgNames.concat(fnBody))))().apply(void 0, fnArgValues);
+}
+exports.evalExpression = evalExpression;
+function isPrimitive(obj) {
+    return !isJsObject(obj);
+}
+exports.isPrimitive = isPrimitive;
+function hasConstructor(value, type) {
+    return value.constructor === type;
+}
+exports.hasConstructor = hasConstructor;
+function escape(s) {
+    return _global.encodeURI(s);
+}
+exports.escape = escape;
+function escapeRegExp(s) {
+    return s.replace(/([.*+?^=!:${}()|[\]\/\\])/g, '\\$1');
+}
+exports.escapeRegExp = escapeRegExp;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+
+},{}],278:[function(require,module,exports){
+arguments[4][31][0].apply(exports,arguments)
+},{"dup":31}],279:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -38059,7 +40674,7 @@ var CachedXHR = (function (_super) {
 }(compiler_1.XHR));
 exports.CachedXHR = CachedXHR;
 
-},{"../facade/exceptions":251,"../facade/lang":252,"../facade/promise":253,"@angular/compiler":75}],255:[function(require,module,exports){
+},{"../facade/exceptions":276,"../facade/lang":277,"../facade/promise":278,"@angular/compiler":79}],280:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -38113,7 +40728,7 @@ var XHRImpl = (function (_super) {
 }(compiler_1.XHR));
 exports.XHRImpl = XHRImpl;
 
-},{"../facade/lang":252,"../facade/promise":253,"@angular/compiler":75}],256:[function(require,module,exports){
+},{"../facade/lang":277,"../facade/promise":278,"@angular/compiler":79}],281:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -38149,7 +40764,7 @@ exports.flattenStyles = core_1.__core_private__.flattenStyles;
 exports.clearStyles = core_1.__core_private__.clearStyles;
 exports.collectAndResolveStyles = core_1.__core_private__.collectAndResolveStyles;
 
-},{"@angular/core":156}],257:[function(require,module,exports){
+},{"@angular/core":160}],282:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -38203,7 +40818,7 @@ __export(require('./src/worker_render'));
 __export(require('./src/worker_app'));
 __export(require('./private_export'));
 
-},{"./private_export":258,"./src/browser":259,"./src/browser/location/browser_platform_location":262,"./src/browser/title":265,"./src/browser/tools/tools":267,"./src/dom/debug/by":268,"./src/dom/dom_tokens":272,"./src/dom/events/event_manager":274,"./src/dom/events/hammer_gestures":276,"./src/security/dom_sanitization_service":290,"./src/web_workers/shared/client_message_broker":295,"./src/web_workers/shared/message_bus":296,"./src/web_workers/shared/serializer":301,"./src/web_workers/shared/service_message_broker":302,"./src/web_workers/ui/location_providers":305,"./src/web_workers/worker/location_providers":309,"./src/worker_app":313,"./src/worker_render":314}],258:[function(require,module,exports){
+},{"./private_export":283,"./src/browser":284,"./src/browser/location/browser_platform_location":287,"./src/browser/title":290,"./src/browser/tools/tools":292,"./src/dom/debug/by":293,"./src/dom/dom_tokens":297,"./src/dom/events/event_manager":299,"./src/dom/events/hammer_gestures":301,"./src/security/dom_sanitization_service":315,"./src/web_workers/shared/client_message_broker":320,"./src/web_workers/shared/message_bus":321,"./src/web_workers/shared/serializer":326,"./src/web_workers/shared/service_message_broker":327,"./src/web_workers/ui/location_providers":330,"./src/web_workers/worker/location_providers":334,"./src/worker_app":338,"./src/worker_render":339}],283:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -38229,7 +40844,7 @@ exports.__platform_browser_private__ = {
     DomEventsPlugin: dom_events.DomEventsPlugin
 };
 
-},{"./src/dom/debug/ng_probe":269,"./src/dom/dom_adapter":270,"./src/dom/dom_renderer":271,"./src/dom/events/dom_events":273,"./src/dom/shared_styles_host":278}],259:[function(require,module,exports){
+},{"./src/dom/debug/ng_probe":294,"./src/dom/dom_adapter":295,"./src/dom/dom_renderer":296,"./src/dom/events/dom_events":298,"./src/dom/shared_styles_host":303}],284:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -38328,7 +40943,7 @@ function _resolveDefaultAnimationDriver() {
     return new core_private_1.NoOpAnimationDriver();
 }
 
-},{"../core_private":256,"../src/dom/web_animations_driver":280,"./browser/browser_adapter":260,"./browser/location/browser_platform_location":262,"./browser/testability":264,"./dom/debug/ng_probe":269,"./dom/dom_adapter":270,"./dom/dom_renderer":271,"./dom/dom_tokens":272,"./dom/events/dom_events":273,"./dom/events/event_manager":274,"./dom/events/hammer_gestures":276,"./dom/events/key_events":277,"./dom/shared_styles_host":278,"./facade/lang":288,"./security/dom_sanitization_service":290,"@angular/common":9,"@angular/core":156}],260:[function(require,module,exports){
+},{"../core_private":281,"../src/dom/web_animations_driver":305,"./browser/browser_adapter":285,"./browser/location/browser_platform_location":287,"./browser/testability":289,"./dom/debug/ng_probe":294,"./dom/dom_adapter":295,"./dom/dom_renderer":296,"./dom/dom_tokens":297,"./dom/events/dom_events":298,"./dom/events/event_manager":299,"./dom/events/hammer_gestures":301,"./dom/events/key_events":302,"./dom/shared_styles_host":303,"./facade/lang":313,"./security/dom_sanitization_service":315,"@angular/common":13,"@angular/core":160}],285:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -38800,7 +41415,7 @@ function parseCookieValue(cookie, name) {
 }
 exports.parseCookieValue = parseCookieValue;
 
-},{"../dom/dom_adapter":270,"../facade/collection":285,"../facade/lang":288,"./generic_browser_adapter":261}],261:[function(require,module,exports){
+},{"../dom/dom_adapter":295,"../facade/collection":310,"../facade/lang":313,"./generic_browser_adapter":286}],286:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -38877,7 +41492,7 @@ var GenericBrowserDomAdapter = (function (_super) {
 }(dom_adapter_1.DomAdapter));
 exports.GenericBrowserDomAdapter = GenericBrowserDomAdapter;
 
-},{"../dom/dom_adapter":270,"../facade/collection":285,"../facade/lang":288}],262:[function(require,module,exports){
+},{"../dom/dom_adapter":295,"../facade/collection":310,"../facade/lang":313}],287:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -38964,7 +41579,7 @@ var BrowserPlatformLocation = (function (_super) {
 }(common_1.PlatformLocation));
 exports.BrowserPlatformLocation = BrowserPlatformLocation;
 
-},{"../../dom/dom_adapter":270,"./history":263,"@angular/common":9,"@angular/core":156}],263:[function(require,module,exports){
+},{"../../dom/dom_adapter":295,"./history":288,"@angular/common":13,"@angular/core":160}],288:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -38978,7 +41593,7 @@ function supportsState() {
 }
 exports.supportsState = supportsState;
 
-},{}],264:[function(require,module,exports){
+},{}],289:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39063,7 +41678,7 @@ var BrowserGetTestability = (function () {
 }());
 exports.BrowserGetTestability = BrowserGetTestability;
 
-},{"../dom/dom_adapter":270,"../facade/collection":285,"../facade/lang":288,"@angular/core":156}],265:[function(require,module,exports){
+},{"../dom/dom_adapter":295,"../facade/collection":310,"../facade/lang":313,"@angular/core":160}],290:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39100,7 +41715,7 @@ var Title = (function () {
 }());
 exports.Title = Title;
 
-},{"../dom/dom_adapter":270}],266:[function(require,module,exports){
+},{"../dom/dom_adapter":295}],291:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39187,7 +41802,7 @@ var AngularProfiler = (function () {
 }());
 exports.AngularProfiler = AngularProfiler;
 
-},{"../../dom/dom_adapter":270,"../../facade/browser":284,"../../facade/lang":288,"@angular/core":156}],267:[function(require,module,exports){
+},{"../../dom/dom_adapter":295,"../../facade/browser":309,"../../facade/lang":313,"@angular/core":160}],292:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39227,7 +41842,7 @@ function disableDebugTools() {
 }
 exports.disableDebugTools = disableDebugTools;
 
-},{"../../facade/lang":288,"./common_tools":266}],268:[function(require,module,exports){
+},{"../../facade/lang":313,"./common_tools":291}],293:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39282,7 +41897,7 @@ var By = (function () {
 }());
 exports.By = By;
 
-},{"../../dom/dom_adapter":270,"../../facade/lang":288}],269:[function(require,module,exports){
+},{"../../dom/dom_adapter":295,"../../facade/lang":313}],294:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39327,7 +41942,7 @@ function _createRootRenderer(rootRenderer /** TODO #9100 */) {
 exports.ELEMENT_PROBE_PROVIDERS = [{ provide: core_1.RootRenderer, useFactory: _createConditionalRootRenderer, deps: [dom_renderer_1.DomRootRenderer] }];
 exports.ELEMENT_PROBE_PROVIDERS_PROD_MODE = [{ provide: core_1.RootRenderer, useFactory: _createRootRenderer, deps: [dom_renderer_1.DomRootRenderer] }];
 
-},{"../../../core_private":256,"../dom_adapter":270,"../dom_renderer":271,"@angular/core":156}],270:[function(require,module,exports){
+},{"../../../core_private":281,"../dom_adapter":295,"../dom_renderer":296,"@angular/core":160}],295:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39378,7 +41993,7 @@ var DomAdapter = (function () {
 }());
 exports.DomAdapter = DomAdapter;
 
-},{"../facade/lang":288}],271:[function(require,module,exports){
+},{"../facade/lang":313}],296:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39671,7 +42286,7 @@ function splitNamespace(name) {
     return [match[1], match[2]];
 }
 
-},{"../../core_private":256,"../facade/exceptions":287,"../facade/lang":288,"./dom_adapter":270,"./dom_tokens":272,"./events/event_manager":274,"./shared_styles_host":278,"./util":279,"@angular/core":156}],272:[function(require,module,exports){
+},{"../../core_private":281,"../facade/exceptions":312,"../facade/lang":313,"./dom_adapter":295,"./dom_tokens":297,"./events/event_manager":299,"./shared_styles_host":303,"./util":304,"@angular/core":160}],297:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39691,7 +42306,7 @@ var core_1 = require('@angular/core');
  */
 exports.DOCUMENT = new core_1.OpaqueToken('DocumentToken');
 
-},{"@angular/core":156}],273:[function(require,module,exports){
+},{"@angular/core":160}],298:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39735,7 +42350,7 @@ var DomEventsPlugin = (function (_super) {
 }(event_manager_1.EventManagerPlugin));
 exports.DomEventsPlugin = DomEventsPlugin;
 
-},{"../dom_adapter":270,"./event_manager":274,"@angular/core":156}],274:[function(require,module,exports){
+},{"../dom_adapter":295,"./event_manager":299,"@angular/core":160}],299:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39805,7 +42420,7 @@ var EventManagerPlugin = (function () {
 }());
 exports.EventManagerPlugin = EventManagerPlugin;
 
-},{"../../facade/collection":285,"../../facade/exceptions":287,"@angular/core":156}],275:[function(require,module,exports){
+},{"../../facade/collection":310,"../../facade/exceptions":312,"@angular/core":160}],300:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39871,7 +42486,7 @@ var HammerGesturesPluginCommon = (function (_super) {
 }(event_manager_1.EventManagerPlugin));
 exports.HammerGesturesPluginCommon = HammerGesturesPluginCommon;
 
-},{"../../facade/collection":285,"./event_manager":274}],276:[function(require,module,exports){
+},{"../../facade/collection":310,"./event_manager":299}],301:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -39958,7 +42573,7 @@ var HammerGesturesPlugin = (function (_super) {
 }(hammer_common_1.HammerGesturesPluginCommon));
 exports.HammerGesturesPlugin = HammerGesturesPlugin;
 
-},{"../../facade/exceptions":287,"../../facade/lang":288,"./hammer_common":275,"@angular/core":156}],277:[function(require,module,exports){
+},{"../../facade/exceptions":312,"../../facade/lang":313,"./hammer_common":300,"@angular/core":160}],302:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -40073,7 +42688,7 @@ var KeyEventsPlugin = (function (_super) {
 }(event_manager_1.EventManagerPlugin));
 exports.KeyEventsPlugin = KeyEventsPlugin;
 
-},{"../../facade/collection":285,"../../facade/lang":288,"../dom_adapter":270,"./event_manager":274,"@angular/core":156}],278:[function(require,module,exports){
+},{"../../facade/collection":310,"../../facade/lang":313,"../dom_adapter":295,"./event_manager":299,"@angular/core":160}],303:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -40156,7 +42771,7 @@ var DomSharedStylesHost = (function (_super) {
 }(SharedStylesHost));
 exports.DomSharedStylesHost = DomSharedStylesHost;
 
-},{"../facade/collection":285,"./dom_adapter":270,"./dom_tokens":272,"@angular/core":156}],279:[function(require,module,exports){
+},{"../facade/collection":310,"./dom_adapter":295,"./dom_tokens":297,"@angular/core":160}],304:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -40177,7 +42792,7 @@ function dashCaseToCamelCase(input) {
 }
 exports.dashCaseToCamelCase = dashCaseToCamelCase;
 
-},{"../facade/lang":288}],280:[function(require,module,exports){
+},{"../facade/lang":313}],305:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -40314,7 +42929,7 @@ function _computeStyle(element, prop) {
     return dom_adapter_1.getDOM().getComputedStyle(element)[prop];
 }
 
-},{"../facade/collection":285,"../facade/lang":288,"./dom_adapter":270,"./util":279,"./web_animations_player":281,"@angular/core":156}],281:[function(require,module,exports){
+},{"../facade/collection":310,"../facade/lang":313,"./dom_adapter":295,"./util":304,"./web_animations_player":306,"@angular/core":160}],306:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -40368,11 +42983,11 @@ var WebAnimationsPlayer = (function () {
 }());
 exports.WebAnimationsPlayer = WebAnimationsPlayer;
 
-},{"../facade/lang":288}],282:[function(require,module,exports){
-arguments[4][20][0].apply(exports,arguments)
-},{"./lang":288,"./promise":289,"dup":20,"rxjs/Observable":337,"rxjs/Subject":340,"rxjs/observable/PromiseObservable":358,"rxjs/operator/toPromise":370}],283:[function(require,module,exports){
-arguments[4][21][0].apply(exports,arguments)
-},{"dup":21}],284:[function(require,module,exports){
+},{"../facade/lang":313}],307:[function(require,module,exports){
+arguments[4][24][0].apply(exports,arguments)
+},{"./lang":313,"./promise":314,"dup":24,"rxjs/Observable":365,"rxjs/Subject":368,"rxjs/observable/PromiseObservable":396,"rxjs/operator/toPromise":416}],308:[function(require,module,exports){
+arguments[4][25][0].apply(exports,arguments)
+},{"dup":25}],309:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -40398,13 +43013,13 @@ exports.History = win['History'];
 exports.Location = win['Location'];
 exports.EventListener = win['EventListener'];
 
-},{}],285:[function(require,module,exports){
-arguments[4][22][0].apply(exports,arguments)
-},{"./lang":288,"dup":22}],286:[function(require,module,exports){
-arguments[4][23][0].apply(exports,arguments)
-},{"./base_wrapped_exception":283,"./collection":285,"./lang":288,"dup":23}],287:[function(require,module,exports){
-arguments[4][24][0].apply(exports,arguments)
-},{"./base_wrapped_exception":283,"./exception_handler":286,"dup":24}],288:[function(require,module,exports){
+},{}],310:[function(require,module,exports){
+arguments[4][26][0].apply(exports,arguments)
+},{"./lang":313,"dup":26}],311:[function(require,module,exports){
+arguments[4][27][0].apply(exports,arguments)
+},{"./base_wrapped_exception":308,"./collection":310,"./lang":313,"dup":27}],312:[function(require,module,exports){
+arguments[4][28][0].apply(exports,arguments)
+},{"./base_wrapped_exception":308,"./exception_handler":311,"dup":28}],313:[function(require,module,exports){
 (function (global){
 /**
  * @license
@@ -40873,9 +43488,9 @@ exports.escapeRegExp = escapeRegExp;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 
-},{}],289:[function(require,module,exports){
-arguments[4][27][0].apply(exports,arguments)
-},{"dup":27}],290:[function(require,module,exports){
+},{}],314:[function(require,module,exports){
+arguments[4][31][0].apply(exports,arguments)
+},{"dup":31}],315:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -41045,7 +43660,7 @@ var SafeResourceUrlImpl = (function (_super) {
     return SafeResourceUrlImpl;
 }(SafeValueImpl));
 
-},{"../../core_private":256,"./html_sanitizer":291,"./style_sanitizer":292,"./url_sanitizer":293,"@angular/core":156}],291:[function(require,module,exports){
+},{"../../core_private":281,"./html_sanitizer":316,"./style_sanitizer":317,"./url_sanitizer":318,"@angular/core":160}],316:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -41303,7 +43918,7 @@ function sanitizeHtml(unsafeHtmlInput) {
 }
 exports.sanitizeHtml = sanitizeHtml;
 
-},{"../dom/dom_adapter":270,"./url_sanitizer":293,"@angular/core":156}],292:[function(require,module,exports){
+},{"../dom/dom_adapter":295,"./url_sanitizer":318,"@angular/core":160}],317:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -41397,7 +44012,7 @@ function sanitizeStyle(value) {
 }
 exports.sanitizeStyle = sanitizeStyle;
 
-},{"../dom/dom_adapter":270,"./url_sanitizer":293,"@angular/core":156}],293:[function(require,module,exports){
+},{"../dom/dom_adapter":295,"./url_sanitizer":318,"@angular/core":160}],318:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -41455,7 +44070,7 @@ function sanitizeSrcset(srcset) {
 }
 exports.sanitizeSrcset = sanitizeSrcset;
 
-},{"../dom/dom_adapter":270,"@angular/core":156}],294:[function(require,module,exports){
+},{"../dom/dom_adapter":295,"@angular/core":160}],319:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -41467,7 +44082,7 @@ exports.sanitizeSrcset = sanitizeSrcset;
 var core_1 = require('@angular/core');
 exports.ON_WEB_WORKER = new core_1.OpaqueToken('WebWorker.onWebWorker');
 
-},{"@angular/core":156}],295:[function(require,module,exports){
+},{"@angular/core":160}],320:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -41659,7 +44274,7 @@ var UiArguments = (function () {
 }());
 exports.UiArguments = UiArguments;
 
-},{"../../facade/async":282,"../../facade/collection":285,"../../facade/lang":288,"./message_bus":296,"./serializer":301,"@angular/core":156}],296:[function(require,module,exports){
+},{"../../facade/async":307,"../../facade/collection":310,"../../facade/lang":313,"./message_bus":321,"./serializer":326,"@angular/core":160}],321:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -41683,7 +44298,7 @@ var MessageBus = (function () {
 }());
 exports.MessageBus = MessageBus;
 
-},{}],297:[function(require,module,exports){
+},{}],322:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -41700,7 +44315,7 @@ exports.RENDERER_CHANNEL = 'ng-Renderer';
 exports.EVENT_CHANNEL = 'ng-Events';
 exports.ROUTER_CHANNEL = 'ng-Router';
 
-},{}],298:[function(require,module,exports){
+},{}],323:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -41855,7 +44470,7 @@ var _Channel = (function () {
     return _Channel;
 }());
 
-},{"../../facade/async":282,"../../facade/collection":285,"../../facade/exceptions":287,"@angular/core":156}],299:[function(require,module,exports){
+},{"../../facade/async":307,"../../facade/collection":310,"../../facade/exceptions":312,"@angular/core":160}],324:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -41906,7 +44521,7 @@ var RenderStore = (function () {
 }());
 exports.RenderStore = RenderStore;
 
-},{"@angular/core":156}],300:[function(require,module,exports){
+},{"@angular/core":160}],325:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -41933,7 +44548,7 @@ var LocationType = (function () {
 }());
 exports.LocationType = LocationType;
 
-},{}],301:[function(require,module,exports){
+},{}],326:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -42060,7 +44675,7 @@ var RenderStoreObject = (function () {
 }());
 exports.RenderStoreObject = RenderStoreObject;
 
-},{"../../../core_private":256,"../../facade/exceptions":287,"../../facade/lang":288,"./render_store":299,"./serialized_types":300,"@angular/core":156}],302:[function(require,module,exports){
+},{"../../../core_private":281,"../../facade/exceptions":312,"../../facade/lang":313,"./render_store":324,"./serialized_types":325,"@angular/core":160}],327:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -42184,7 +44799,7 @@ var ReceivedMessage = (function () {
 }());
 exports.ReceivedMessage = ReceivedMessage;
 
-},{"../../facade/async":282,"../../facade/collection":285,"../../facade/lang":288,"../shared/message_bus":296,"../shared/serializer":301,"@angular/core":156}],303:[function(require,module,exports){
+},{"../../facade/async":307,"../../facade/collection":310,"../../facade/lang":313,"../shared/message_bus":321,"../shared/serializer":326,"@angular/core":160}],328:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -42299,7 +44914,7 @@ var EventDispatcher = (function () {
 }());
 exports.EventDispatcher = EventDispatcher;
 
-},{"../../facade/async":282,"../../facade/exceptions":287,"../shared/serializer":301,"./event_serializer":304}],304:[function(require,module,exports){
+},{"../../facade/async":307,"../../facade/exceptions":312,"../shared/serializer":326,"./event_serializer":329}],329:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -42366,7 +44981,7 @@ function serializeEvent(e, properties) {
     return serialized;
 }
 
-},{"../../facade/collection":285,"../../facade/lang":288}],305:[function(require,module,exports){
+},{"../../facade/collection":310,"../../facade/lang":313}],330:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -42394,7 +45009,7 @@ function initUiLocation(injector) {
     };
 }
 
-},{"../../browser/location/browser_platform_location":262,"./platform_location":306,"@angular/core":156}],306:[function(require,module,exports){
+},{"../../browser/location/browser_platform_location":287,"./platform_location":331,"@angular/core":160}],331:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -42454,7 +45069,7 @@ var MessageBasedPlatformLocation = (function () {
 }());
 exports.MessageBasedPlatformLocation = MessageBasedPlatformLocation;
 
-},{"../../browser/location/browser_platform_location":262,"../../facade/async":282,"../../facade/lang":288,"../shared/message_bus":296,"../shared/messaging_api":297,"../shared/serialized_types":300,"../shared/serializer":301,"../shared/service_message_broker":302,"@angular/core":156}],307:[function(require,module,exports){
+},{"../../browser/location/browser_platform_location":287,"../../facade/async":307,"../../facade/lang":313,"../shared/message_bus":321,"../shared/messaging_api":322,"../shared/serialized_types":325,"../shared/serializer":326,"../shared/service_message_broker":327,"@angular/core":160}],332:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -42593,7 +45208,7 @@ var MessageBasedRenderer = (function () {
 }());
 exports.MessageBasedRenderer = MessageBasedRenderer;
 
-},{"../../facade/lang":288,"../shared/message_bus":296,"../shared/messaging_api":297,"../shared/render_store":299,"../shared/serializer":301,"../shared/service_message_broker":302,"../ui/event_dispatcher":303,"@angular/core":156}],308:[function(require,module,exports){
+},{"../../facade/lang":313,"../shared/message_bus":321,"../shared/messaging_api":322,"../shared/render_store":324,"../shared/serializer":326,"../shared/service_message_broker":327,"../ui/event_dispatcher":328,"@angular/core":160}],333:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -42609,7 +45224,7 @@ function deserializeGenericEvent(serializedEvent) {
 }
 exports.deserializeGenericEvent = deserializeGenericEvent;
 
-},{}],309:[function(require,module,exports){
+},{}],334:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -42638,7 +45253,7 @@ function appInitFnFactory(platformLocation, zone) {
     return function () { return zone.runGuarded(function () { return platformLocation.init(); }); };
 }
 
-},{"./platform_location":310,"@angular/common":9,"@angular/core":156}],310:[function(require,module,exports){
+},{"./platform_location":335,"@angular/common":13,"@angular/core":160}],335:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -42780,7 +45395,7 @@ var WebWorkerPlatformLocation = (function (_super) {
 }(common_1.PlatformLocation));
 exports.WebWorkerPlatformLocation = WebWorkerPlatformLocation;
 
-},{"../../facade/async":282,"../../facade/collection":285,"../../facade/exceptions":287,"../../facade/lang":288,"../shared/client_message_broker":295,"../shared/message_bus":296,"../shared/messaging_api":297,"../shared/serialized_types":300,"../shared/serializer":301,"./event_deserializer":308,"@angular/common":9,"@angular/core":156}],311:[function(require,module,exports){
+},{"../../facade/async":307,"../../facade/collection":310,"../../facade/exceptions":312,"../../facade/lang":313,"../shared/client_message_broker":320,"../shared/message_bus":321,"../shared/messaging_api":322,"../shared/serialized_types":325,"../shared/serializer":326,"./event_deserializer":333,"@angular/common":13,"@angular/core":160}],336:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -43029,7 +45644,7 @@ var WebWorkerRenderNode = (function () {
 }());
 exports.WebWorkerRenderNode = WebWorkerRenderNode;
 
-},{"../../facade/async":282,"../../facade/collection":285,"../../facade/lang":288,"../shared/client_message_broker":295,"../shared/message_bus":296,"../shared/messaging_api":297,"../shared/render_store":299,"../shared/serializer":301,"./event_deserializer":308,"@angular/core":156}],312:[function(require,module,exports){
+},{"../../facade/async":307,"../../facade/collection":310,"../../facade/lang":313,"../shared/client_message_broker":320,"../shared/message_bus":321,"../shared/messaging_api":322,"../shared/render_store":324,"../shared/serializer":326,"./event_deserializer":333,"@angular/core":160}],337:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -43245,7 +45860,7 @@ var WorkerDomAdapter = (function (_super) {
 }(dom_adapter_1.DomAdapter));
 exports.WorkerDomAdapter = WorkerDomAdapter;
 
-},{"../../dom/dom_adapter":270}],313:[function(require,module,exports){
+},{"../../dom/dom_adapter":295}],338:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -43324,7 +45939,7 @@ function setupWebWorker() {
     worker_adapter_1.WorkerDomAdapter.makeCurrent();
 }
 
-},{"./browser":259,"./facade/lang":288,"./web_workers/shared/api":294,"./web_workers/shared/client_message_broker":295,"./web_workers/shared/message_bus":296,"./web_workers/shared/post_message_bus":298,"./web_workers/shared/render_store":299,"./web_workers/shared/serializer":301,"./web_workers/shared/service_message_broker":302,"./web_workers/worker/renderer":311,"./web_workers/worker/worker_adapter":312,"@angular/common":9,"@angular/core":156}],314:[function(require,module,exports){
+},{"./browser":284,"./facade/lang":313,"./web_workers/shared/api":319,"./web_workers/shared/client_message_broker":320,"./web_workers/shared/message_bus":321,"./web_workers/shared/post_message_bus":323,"./web_workers/shared/render_store":324,"./web_workers/shared/serializer":326,"./web_workers/shared/service_message_broker":327,"./web_workers/worker/renderer":336,"./web_workers/worker/worker_adapter":337,"@angular/common":13,"@angular/core":160}],339:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -43485,7 +46100,7 @@ function _resolveDefaultAnimationDriver() {
     return new core_private_1.NoOpAnimationDriver();
 }
 
-},{"../core_private":256,"./browser":259,"./browser/browser_adapter":260,"./browser/testability":264,"./dom/dom_adapter":270,"./dom/dom_renderer":271,"./dom/dom_tokens":272,"./dom/events/dom_events":273,"./dom/events/event_manager":274,"./dom/events/hammer_gestures":276,"./dom/events/key_events":277,"./dom/shared_styles_host":278,"./facade/exceptions":287,"./facade/lang":288,"./web_workers/shared/api":294,"./web_workers/shared/client_message_broker":295,"./web_workers/shared/message_bus":296,"./web_workers/shared/post_message_bus":298,"./web_workers/shared/render_store":299,"./web_workers/shared/serializer":301,"./web_workers/shared/service_message_broker":302,"./web_workers/ui/renderer":307,"@angular/core":156}],315:[function(require,module,exports){
+},{"../core_private":281,"./browser":284,"./browser/browser_adapter":285,"./browser/testability":289,"./dom/dom_adapter":295,"./dom/dom_renderer":296,"./dom/dom_tokens":297,"./dom/events/dom_events":298,"./dom/events/event_manager":299,"./dom/events/hammer_gestures":301,"./dom/events/key_events":302,"./dom/shared_styles_host":303,"./facade/exceptions":312,"./facade/lang":313,"./web_workers/shared/api":319,"./web_workers/shared/client_message_broker":320,"./web_workers/shared/message_bus":321,"./web_workers/shared/post_message_bus":323,"./web_workers/shared/render_store":324,"./web_workers/shared/serializer":326,"./web_workers/shared/service_message_broker":327,"./web_workers/ui/renderer":332,"@angular/core":160}],340:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -43532,7 +46147,7 @@ exports.UrlTree = url_tree_1.UrlTree;
  */
 exports.ROUTER_DIRECTIVES = [router_outlet_1.RouterOutlet, router_link_1.RouterLink, router_link_1.RouterLinkWithHref, router_link_active_1.RouterLinkActive];
 
-},{"./src/directives/router_link":321,"./src/directives/router_link_active":322,"./src/directives/router_outlet":323,"./src/router":326,"./src/router_outlet_map":327,"./src/router_providers":328,"./src/router_state":329,"./src/shared":330,"./src/url_tree":331}],316:[function(require,module,exports){
+},{"./src/directives/router_link":346,"./src/directives/router_link_active":347,"./src/directives/router_outlet":348,"./src/router":351,"./src/router_outlet_map":352,"./src/router_providers":353,"./src/router_state":354,"./src/shared":355,"./src/url_tree":356}],341:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -43798,7 +46413,7 @@ function getOutlet(route) {
     return route.outlet ? route.outlet : shared_1.PRIMARY_OUTLET;
 }
 
-},{"./shared":330,"./url_tree":331,"./utils/collection":332,"rxjs/Observable":337,"rxjs/observable/of":363}],317:[function(require,module,exports){
+},{"./shared":355,"./url_tree":356,"./utils/collection":357,"rxjs/Observable":365,"rxjs/observable/of":401}],342:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -43890,7 +46505,7 @@ function provideRouter(_config, _opts) {
 }
 exports.provideRouter = provideRouter;
 
-},{"./router":326,"./router_outlet_map":327,"./router_state":329,"./url_tree":331,"@angular/common":9,"@angular/core":156}],318:[function(require,module,exports){
+},{"./router":351,"./router_outlet_map":352,"./router_state":354,"./url_tree":356,"@angular/common":13,"@angular/core":160}],343:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -43926,7 +46541,7 @@ function validateNode(route) {
     }
 }
 
-},{}],319:[function(require,module,exports){
+},{}],344:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -43976,7 +46591,7 @@ function equalRouteSnapshots(a, b) {
     return a._routeConfig === b._routeConfig;
 }
 
-},{"./router_state":329,"./utils/tree":333,"rxjs/BehaviorSubject":334}],320:[function(require,module,exports){
+},{"./router_state":354,"./utils/tree":358,"rxjs/BehaviorSubject":362}],345:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -44205,7 +46820,7 @@ function compare(path, params, pathWithParams) {
     return path == pathWithParams.path && collection_1.shallowEqual(params, pathWithParams.parameters);
 }
 
-},{"./shared":330,"./url_tree":331,"./utils/collection":332}],321:[function(require,module,exports){
+},{"./shared":355,"./url_tree":356,"./utils/collection":357}],346:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -44329,7 +46944,7 @@ var RouterLinkWithHref = (function () {
 }());
 exports.RouterLinkWithHref = RouterLinkWithHref;
 
-},{"../router":326,"../router_state":329,"@angular/common":9,"@angular/core":156}],322:[function(require,module,exports){
+},{"../router":351,"../router_state":354,"@angular/common":13,"@angular/core":160}],347:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -44415,7 +47030,7 @@ var RouterLinkActive = (function () {
 }());
 exports.RouterLinkActive = RouterLinkActive;
 
-},{"../router":326,"../url_tree":331,"./router_link":321,"@angular/core":156}],323:[function(require,module,exports){
+},{"../router":351,"../url_tree":356,"./router_link":346,"@angular/core":160}],348:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -44501,7 +47116,7 @@ var RouterOutlet = (function () {
 }());
 exports.RouterOutlet = RouterOutlet;
 
-},{"../router_outlet_map":327,"../shared":330,"@angular/core":156}],324:[function(require,module,exports){
+},{"../router_outlet_map":352,"../shared":355,"@angular/core":160}],349:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -44772,7 +47387,7 @@ function getResolve(route) {
     return route.resolve ? route.resolve : {};
 }
 
-},{"./router_state":329,"./shared":330,"./url_tree":331,"./utils/collection":332,"./utils/tree":333,"rxjs/Observable":337,"rxjs/observable/of":363}],325:[function(require,module,exports){
+},{"./router_state":354,"./shared":355,"./url_tree":356,"./utils/collection":357,"./utils/tree":358,"rxjs/Observable":365,"rxjs/observable/of":401}],350:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -44814,7 +47429,7 @@ function resolveComponent(resolver, snapshot) {
     }
 }
 
-},{"rxjs/add/operator/map":347,"rxjs/add/operator/toPromise":351,"rxjs/observable/forkJoin":360,"rxjs/observable/fromPromise":362}],326:[function(require,module,exports){
+},{"rxjs/add/operator/map":383,"rxjs/add/operator/toPromise":388,"rxjs/observable/forkJoin":398,"rxjs/observable/fromPromise":400}],351:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -45479,7 +48094,7 @@ function getOutlet(outletMap, route) {
     return outlet;
 }
 
-},{"./apply_redirects":316,"./config":318,"./create_router_state":319,"./create_url_tree":320,"./recognize":324,"./resolve":325,"./router_outlet_map":327,"./router_state":329,"./shared":330,"./url_tree":331,"./utils/collection":332,"@angular/core":156,"rxjs/Observable":337,"rxjs/Subject":340,"rxjs/add/observable/forkJoin":344,"rxjs/add/observable/from":345,"rxjs/add/operator/every":346,"rxjs/add/operator/map":347,"rxjs/add/operator/mergeAll":348,"rxjs/add/operator/mergeMap":349,"rxjs/add/operator/reduce":350,"rxjs/observable/of":363}],327:[function(require,module,exports){
+},{"./apply_redirects":341,"./config":343,"./create_router_state":344,"./create_url_tree":345,"./recognize":349,"./resolve":350,"./router_outlet_map":352,"./router_state":354,"./shared":355,"./url_tree":356,"./utils/collection":357,"@angular/core":160,"rxjs/Observable":365,"rxjs/Subject":368,"rxjs/add/observable/forkJoin":372,"rxjs/add/observable/from":373,"rxjs/add/operator/every":381,"rxjs/add/operator/map":383,"rxjs/add/operator/mergeAll":384,"rxjs/add/operator/mergeMap":385,"rxjs/add/operator/reduce":386,"rxjs/observable/of":401}],352:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -45501,7 +48116,7 @@ var RouterOutletMap = (function () {
 }());
 exports.RouterOutletMap = RouterOutletMap;
 
-},{}],328:[function(require,module,exports){
+},{}],353:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -45541,7 +48156,7 @@ function provideRouter(config, opts) {
 }
 exports.provideRouter = provideRouter;
 
-},{"./common_router_providers":317,"@angular/common":9,"@angular/platform-browser":257}],329:[function(require,module,exports){
+},{"./common_router_providers":342,"@angular/common":13,"@angular/platform-browser":282}],354:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -45774,7 +48389,7 @@ function advanceActivatedRoute(route) {
 }
 exports.advanceActivatedRoute = advanceActivatedRoute;
 
-},{"./shared":330,"./url_tree":331,"./utils/collection":332,"./utils/tree":333,"rxjs/BehaviorSubject":334}],330:[function(require,module,exports){
+},{"./shared":355,"./url_tree":356,"./utils/collection":357,"./utils/tree":358,"rxjs/BehaviorSubject":362}],355:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -45791,7 +48406,7 @@ exports.advanceActivatedRoute = advanceActivatedRoute;
  */
 exports.PRIMARY_OUTLET = 'PRIMARY_OUTLET';
 
-},{}],331:[function(require,module,exports){
+},{}],356:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -46229,7 +48844,7 @@ var UrlParser = (function () {
     return UrlParser;
 }());
 
-},{"./shared":330,"./utils/collection":332}],332:[function(require,module,exports){
+},{"./shared":355,"./utils/collection":357}],357:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -46310,7 +48925,7 @@ function forEach(map, callback) {
 }
 exports.forEach = forEach;
 
-},{}],333:[function(require,module,exports){
+},{}],358:[function(require,module,exports){
 /**
  * @license
  * Copyright Google Inc. All Rights Reserved.
@@ -46403,7 +49018,889 @@ var TreeNode = (function () {
 }());
 exports.TreeNode = TreeNode;
 
-},{}],334:[function(require,module,exports){
+},{}],359:[function(require,module,exports){
+"use strict";
+exports.STATUS = {
+    CONTINUE: 100,
+    SWITCHING_PROTOCOLS: 101,
+    OK: 200,
+    CREATED: 201,
+    ACCEPTED: 202,
+    NON_AUTHORITATIVE_INFORMATION: 203,
+    NO_CONTENT: 204,
+    RESET_CONTENT: 205,
+    PARTIAL_CONTENT: 206,
+    MULTIPLE_CHOICES: 300,
+    MOVED_PERMANTENTLY: 301,
+    FOUND: 302,
+    SEE_OTHER: 303,
+    NOT_MODIFIED: 304,
+    USE_PROXY: 305,
+    TEMPORARY_REDIRECT: 307,
+    BAD_REQUEST: 400,
+    UNAUTHORIZED: 401,
+    PAYMENT_REQUIRED: 402,
+    FORBIDDEN: 403,
+    NOT_FOUND: 404,
+    METHOD_NOT_ALLOWED: 405,
+    NOT_ACCEPTABLE: 406,
+    PROXY_AUTHENTICATION_REQUIRED: 407,
+    REQUEST_TIMEOUT: 408,
+    CONFLICT: 409,
+    GONE: 410,
+    LENGTH_REQUIRED: 411,
+    PRECONDITION_FAILED: 412,
+    PAYLOAD_TO_LARGE: 413,
+    URI_TOO_LONG: 414,
+    UNSUPPORTED_MEDIA_TYPE: 415,
+    RANGE_NOT_SATISFIABLE: 416,
+    EXPECTATION_FAILED: 417,
+    IM_A_TEAPOT: 418,
+    UPGRADE_REQUIRED: 426,
+    INTERNAL_SERVER_ERROR: 500,
+    NOT_IMPLEMENTED: 501,
+    BAD_GATEWAY: 502,
+    SERVICE_UNAVAILABLE: 503,
+    GATEWAY_TIMEOUT: 504,
+    HTTP_VERSION_NOT_SUPPORTED: 505,
+    PROCESSING: 102,
+    MULTI_STATUS: 207,
+    IM_USED: 226,
+    PERMANENT_REDIRECT: 308,
+    UNPROCESSABLE_ENTRY: 422,
+    LOCKED: 423,
+    FAILED_DEPENDENCY: 424,
+    PRECONDITION_REQUIRED: 428,
+    TOO_MANY_REQUESTS: 429,
+    REQUEST_HEADER_FIELDS_TOO_LARGE: 431,
+    UNAVAILABLE_FOR_LEGAL_REASONS: 451,
+    VARIANT_ALSO_NEGOTIATES: 506,
+    INSUFFICIENT_STORAGE: 507,
+    NETWORK_AUTHENTICATION_REQUIRED: 511
+};
+/*tslint:disable:quotemark max-line-length one-line */
+exports.STATUS_CODE_INFO = {
+    "100": {
+        "code": 100,
+        "text": "Continue",
+        "description": "\"The initial part of a request has been received and has not yet been rejected by the server.\"",
+        "spec_title": "RFC7231#6.2.1",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.2.1"
+    },
+    "101": {
+        "code": 101,
+        "text": "Switching Protocols",
+        "description": "\"The server understands and is willing to comply with the client's request, via the Upgrade header field, for a change in the application protocol being used on this connection.\"",
+        "spec_title": "RFC7231#6.2.2",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.2.2"
+    },
+    "200": {
+        "code": 200,
+        "text": "OK",
+        "description": "\"The request has succeeded.\"",
+        "spec_title": "RFC7231#6.3.1",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.3.1"
+    },
+    "201": {
+        "code": 201,
+        "text": "Created",
+        "description": "\"The request has been fulfilled and has resulted in one or more new resources being created.\"",
+        "spec_title": "RFC7231#6.3.2",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.3.2"
+    },
+    "202": {
+        "code": 202,
+        "text": "Accepted",
+        "description": "\"The request has been accepted for processing, but the processing has not been completed.\"",
+        "spec_title": "RFC7231#6.3.3",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.3.3"
+    },
+    "203": {
+        "code": 203,
+        "text": "Non-Authoritative Information",
+        "description": "\"The request was successful but the enclosed payload has been modified from that of the origin server's 200 (OK) response by a transforming proxy.\"",
+        "spec_title": "RFC7231#6.3.4",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.3.4"
+    },
+    "204": {
+        "code": 204,
+        "text": "No Content",
+        "description": "\"The server has successfully fulfilled the request and that there is no additional content to send in the response payload body.\"",
+        "spec_title": "RFC7231#6.3.5",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.3.5"
+    },
+    "205": {
+        "code": 205,
+        "text": "Reset Content",
+        "description": "\"The server has fulfilled the request and desires that the user agent reset the \"document view\", which caused the request to be sent, to its original state as received from the origin server.\"",
+        "spec_title": "RFC7231#6.3.6",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.3.6"
+    },
+    "206": {
+        "code": 206,
+        "text": "Partial Content",
+        "description": "\"The server is successfully fulfilling a range request for the target resource by transferring one or more parts of the selected representation that correspond to the satisfiable ranges found in the requests's Range header field.\"",
+        "spec_title": "RFC7233#4.1",
+        "spec_href": "http://tools.ietf.org/html/rfc7233#section-4.1"
+    },
+    "300": {
+        "code": 300,
+        "text": "Multiple Choices",
+        "description": "\"The target resource has more than one representation, each with its own more specific identifier, and information about the alternatives is being provided so that the user (or user agent) can select a preferred representation by redirecting its request to one or more of those identifiers.\"",
+        "spec_title": "RFC7231#6.4.1",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.4.1"
+    },
+    "301": {
+        "code": 301,
+        "text": "Moved Permanently",
+        "description": "\"The target resource has been assigned a new permanent URI and any future references to this resource ought to use one of the enclosed URIs.\"",
+        "spec_title": "RFC7231#6.4.2",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.4.2"
+    },
+    "302": {
+        "code": 302,
+        "text": "Found",
+        "description": "\"The target resource resides temporarily under a different URI.\"",
+        "spec_title": "RFC7231#6.4.3",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.4.3"
+    },
+    "303": {
+        "code": 303,
+        "text": "See Other",
+        "description": "\"The server is redirecting the user agent to a different resource, as indicated by a URI in the Location header field, that is intended to provide an indirect response to the original request.\"",
+        "spec_title": "RFC7231#6.4.4",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.4.4"
+    },
+    "304": {
+        "code": 304,
+        "text": "Not Modified",
+        "description": "\"A conditional GET request has been received and would have resulted in a 200 (OK) response if it were not for the fact that the condition has evaluated to false.\"",
+        "spec_title": "RFC7232#4.1",
+        "spec_href": "http://tools.ietf.org/html/rfc7232#section-4.1"
+    },
+    "305": {
+        "code": 305,
+        "text": "Use Proxy",
+        "description": "*deprecated*",
+        "spec_title": "RFC7231#6.4.5",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.4.5"
+    },
+    "307": {
+        "code": 307,
+        "text": "Temporary Redirect",
+        "description": "\"The target resource resides temporarily under a different URI and the user agent MUST NOT change the request method if it performs an automatic redirection to that URI.\"",
+        "spec_title": "RFC7231#6.4.7",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.4.7"
+    },
+    "400": {
+        "code": 400,
+        "text": "Bad Request",
+        "description": "\"The server cannot or will not process the request because the received syntax is invalid, nonsensical, or exceeds some limitation on what the server is willing to process.\"",
+        "spec_title": "RFC7231#6.5.1",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.1"
+    },
+    "401": {
+        "code": 401,
+        "text": "Unauthorized",
+        "description": "\"The request has not been applied because it lacks valid authentication credentials for the target resource.\"",
+        "spec_title": "RFC7235#6.3.1",
+        "spec_href": "http://tools.ietf.org/html/rfc7235#section-3.1"
+    },
+    "402": {
+        "code": 402,
+        "text": "Payment Required",
+        "description": "*reserved*",
+        "spec_title": "RFC7231#6.5.2",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.2"
+    },
+    "403": {
+        "code": 403,
+        "text": "Forbidden",
+        "description": "\"The server understood the request but refuses to authorize it.\"",
+        "spec_title": "RFC7231#6.5.3",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.3"
+    },
+    "404": {
+        "code": 404,
+        "text": "Not Found",
+        "description": "\"The origin server did not find a current representation for the target resource or is not willing to disclose that one exists.\"",
+        "spec_title": "RFC7231#6.5.4",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.4"
+    },
+    "405": {
+        "code": 405,
+        "text": "Method Not Allowed",
+        "description": "\"The method specified in the request-line is known by the origin server but not supported by the target resource.\"",
+        "spec_title": "RFC7231#6.5.5",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.5"
+    },
+    "406": {
+        "code": 406,
+        "text": "Not Acceptable",
+        "description": "\"The target resource does not have a current representation that would be acceptable to the user agent, according to the proactive negotiation header fields received in the request, and the server is unwilling to supply a default representation.\"",
+        "spec_title": "RFC7231#6.5.6",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.6"
+    },
+    "407": {
+        "code": 407,
+        "text": "Proxy Authentication Required",
+        "description": "\"The client needs to authenticate itself in order to use a proxy.\"",
+        "spec_title": "RFC7231#6.3.2",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.3.2"
+    },
+    "408": {
+        "code": 408,
+        "text": "Request Timeout",
+        "description": "\"The server did not receive a complete request message within the time that it was prepared to wait.\"",
+        "spec_title": "RFC7231#6.5.7",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.7"
+    },
+    "409": {
+        "code": 409,
+        "text": "Conflict",
+        "description": "\"The request could not be completed due to a conflict with the current state of the resource.\"",
+        "spec_title": "RFC7231#6.5.8",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.8"
+    },
+    "410": {
+        "code": 410,
+        "text": "Gone",
+        "description": "\"Access to the target resource is no longer available at the origin server and that this condition is likely to be permanent.\"",
+        "spec_title": "RFC7231#6.5.9",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.9"
+    },
+    "411": {
+        "code": 411,
+        "text": "Length Required",
+        "description": "\"The server refuses to accept the request without a defined Content-Length.\"",
+        "spec_title": "RFC7231#6.5.10",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.10"
+    },
+    "412": {
+        "code": 412,
+        "text": "Precondition Failed",
+        "description": "\"One or more preconditions given in the request header fields evaluated to false when tested on the server.\"",
+        "spec_title": "RFC7232#4.2",
+        "spec_href": "http://tools.ietf.org/html/rfc7232#section-4.2"
+    },
+    "413": {
+        "code": 413,
+        "text": "Payload Too Large",
+        "description": "\"The server is refusing to process a request because the request payload is larger than the server is willing or able to process.\"",
+        "spec_title": "RFC7231#6.5.11",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.11"
+    },
+    "414": {
+        "code": 414,
+        "text": "URI Too Long",
+        "description": "\"The server is refusing to service the request because the request-target is longer than the server is willing to interpret.\"",
+        "spec_title": "RFC7231#6.5.12",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.12"
+    },
+    "415": {
+        "code": 415,
+        "text": "Unsupported Media Type",
+        "description": "\"The origin server is refusing to service the request because the payload is in a format not supported by the target resource for this method.\"",
+        "spec_title": "RFC7231#6.5.13",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.13"
+    },
+    "416": {
+        "code": 416,
+        "text": "Range Not Satisfiable",
+        "description": "\"None of the ranges in the request's Range header field overlap the current extent of the selected resource or that the set of ranges requested has been rejected due to invalid ranges or an excessive request of small or overlapping ranges.\"",
+        "spec_title": "RFC7233#4.4",
+        "spec_href": "http://tools.ietf.org/html/rfc7233#section-4.4"
+    },
+    "417": {
+        "code": 417,
+        "text": "Expectation Failed",
+        "description": "\"The expectation given in the request's Expect header field could not be met by at least one of the inbound servers.\"",
+        "spec_title": "RFC7231#6.5.14",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.14"
+    },
+    "418": {
+        "code": 418,
+        "text": "I'm a teapot",
+        "description": "\"1988 April Fools Joke. Returned by tea pots requested to brew coffee.\"",
+        "spec_title": "RFC 2324",
+        "spec_href": "https://tools.ietf.org/html/rfc2324"
+    },
+    "426": {
+        "code": 426,
+        "text": "Upgrade Required",
+        "description": "\"The server refuses to perform the request using the current protocol but might be willing to do so after the client upgrades to a different protocol.\"",
+        "spec_title": "RFC7231#6.5.15",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.5.15"
+    },
+    "500": {
+        "code": 500,
+        "text": "Internal Server Error",
+        "description": "\"The server encountered an unexpected condition that prevented it from fulfilling the request.\"",
+        "spec_title": "RFC7231#6.6.1",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.6.1"
+    },
+    "501": {
+        "code": 501,
+        "text": "Not Implemented",
+        "description": "\"The server does not support the functionality required to fulfill the request.\"",
+        "spec_title": "RFC7231#6.6.2",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.6.2"
+    },
+    "502": {
+        "code": 502,
+        "text": "Bad Gateway",
+        "description": "\"The server, while acting as a gateway or proxy, received an invalid response from an inbound server it accessed while attempting to fulfill the request.\"",
+        "spec_title": "RFC7231#6.6.3",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.6.3"
+    },
+    "503": {
+        "code": 503,
+        "text": "Service Unavailable",
+        "description": "\"The server is currently unable to handle the request due to a temporary overload or scheduled maintenance, which will likely be alleviated after some delay.\"",
+        "spec_title": "RFC7231#6.6.4",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.6.4"
+    },
+    "504": {
+        "code": 504,
+        "text": "Gateway Time-out",
+        "description": "\"The server, while acting as a gateway or proxy, did not receive a timely response from an upstream server it needed to access in order to complete the request.\"",
+        "spec_title": "RFC7231#6.6.5",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.6.5"
+    },
+    "505": {
+        "code": 505,
+        "text": "HTTP Version Not Supported",
+        "description": "\"The server does not support, or refuses to support, the protocol version that was used in the request message.\"",
+        "spec_title": "RFC7231#6.6.6",
+        "spec_href": "http://tools.ietf.org/html/rfc7231#section-6.6.6"
+    },
+    "102": {
+        "code": 102,
+        "text": "Processing",
+        "description": "\"An interim response to inform the client that the server has accepted the complete request, but has not yet completed it.\"",
+        "spec_title": "RFC5218#10.1",
+        "spec_href": "http://tools.ietf.org/html/rfc2518#section-10.1"
+    },
+    "207": {
+        "code": 207,
+        "text": "Multi-Status",
+        "description": "\"Status for multiple independent operations.\"",
+        "spec_title": "RFC5218#10.2",
+        "spec_href": "http://tools.ietf.org/html/rfc2518#section-10.2"
+    },
+    "226": {
+        "code": 226,
+        "text": "IM Used",
+        "description": "\"The server has fulfilled a GET request for the resource, and the response is a representation of the result of one or more instance-manipulations applied to the current instance.\"",
+        "spec_title": "RFC3229#10.4.1",
+        "spec_href": "http://tools.ietf.org/html/rfc3229#section-10.4.1"
+    },
+    "308": {
+        "code": 308,
+        "text": "Permanent Redirect",
+        "description": "\"The target resource has been assigned a new permanent URI and any future references to this resource SHOULD use one of the returned URIs. [...] This status code is similar to 301 Moved Permanently (Section 7.3.2 of rfc7231), except that it does not allow rewriting the request method from POST to GET.\"",
+        "spec_title": "RFC7238",
+        "spec_href": "http://tools.ietf.org/html/rfc7238"
+    },
+    "422": {
+        "code": 422,
+        "text": "Unprocessable Entity",
+        "description": "\"The server understands the content type of the request entity (hence a 415(Unsupported Media Type) status code is inappropriate), and the syntax of the request entity is correct (thus a 400 (Bad Request) status code is inappropriate) but was unable to process the contained instructions.\"",
+        "spec_title": "RFC5218#10.3",
+        "spec_href": "http://tools.ietf.org/html/rfc2518#section-10.3"
+    },
+    "423": {
+        "code": 423,
+        "text": "Locked",
+        "description": "\"The source or destination resource of a method is locked.\"",
+        "spec_title": "RFC5218#10.4",
+        "spec_href": "http://tools.ietf.org/html/rfc2518#section-10.4"
+    },
+    "424": {
+        "code": 424,
+        "text": "Failed Dependency",
+        "description": "\"The method could not be performed on the resource because the requested action depended on another action and that action failed.\"",
+        "spec_title": "RFC5218#10.5",
+        "spec_href": "http://tools.ietf.org/html/rfc2518#section-10.5"
+    },
+    "428": {
+        "code": 428,
+        "text": "Precondition Required",
+        "description": "\"The origin server requires the request to be conditional.\"",
+        "spec_title": "RFC6585#3",
+        "spec_href": "http://tools.ietf.org/html/rfc6585#section-3"
+    },
+    "429": {
+        "code": 429,
+        "text": "Too Many Requests",
+        "description": "\"The user has sent too many requests in a given amount of time (\"rate limiting\").\"",
+        "spec_title": "RFC6585#4",
+        "spec_href": "http://tools.ietf.org/html/rfc6585#section-4"
+    },
+    "431": {
+        "code": 431,
+        "text": "Request Header Fields Too Large",
+        "description": "\"The server is unwilling to process the request because its header fields are too large.\"",
+        "spec_title": "RFC6585#5",
+        "spec_href": "http://tools.ietf.org/html/rfc6585#section-5"
+    },
+    "451": {
+        "code": 451,
+        "text": "Unavailable For Legal Reasons",
+        "description": "\"The server is denying access to the resource in response to a legal demand.\"",
+        "spec_title": "draft-ietf-httpbis-legally-restricted-status",
+        "spec_href": "http://tools.ietf.org/html/draft-ietf-httpbis-legally-restricted-status"
+    },
+    "506": {
+        "code": 506,
+        "text": "Variant Also Negotiates",
+        "description": "\"The server has an internal configuration error: the chosen variant resource is configured to engage in transparent content negotiation itself, and is therefore not a proper end point in the negotiation process.\"",
+        "spec_title": "RFC2295#8.1",
+        "spec_href": "http://tools.ietf.org/html/rfc2295#section-8.1"
+    },
+    "507": {
+        "code": 507,
+        "text": "Insufficient Storage",
+        "description": "\The method could not be performed on the resource because the server is unable to store the representation needed to successfully complete the request.\"",
+        "spec_title": "RFC5218#10.6",
+        "spec_href": "http://tools.ietf.org/html/rfc2518#section-10.6"
+    },
+    "511": {
+        "code": 511,
+        "text": "Network Authentication Required",
+        "description": "\"The client needs to authenticate to gain network access.\"",
+        "spec_title": "RFC6585#6",
+        "spec_href": "http://tools.ietf.org/html/rfc6585#section-6"
+    }
+};
+
+},{}],360:[function(require,module,exports){
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
+var core_1 = require('@angular/core');
+var http_1 = require('@angular/http');
+var Observable_1 = require('rxjs/Observable');
+require('rxjs/add/operator/delay');
+var http_status_codes_1 = require('./http-status-codes');
+/**
+* Seed data for in-memory database
+* Must implement InMemoryDbService.
+*/
+exports.SEED_DATA = new core_1.OpaqueToken('seedData');
+/**
+*  InMemoryBackendService configuration options
+*  Usage:
+*    provide(InMemoryBackendConfig, {useValue: {delay:600}}),
+*/
+var InMemoryBackendConfig = (function () {
+    function InMemoryBackendConfig(config) {
+        if (config === void 0) { config = {}; }
+        Object.assign(this, {
+            defaultResponseOptions: new http_1.BaseResponseOptions(),
+            delay: 500,
+            delete404: false
+        }, config);
+    }
+    return InMemoryBackendConfig;
+}());
+exports.InMemoryBackendConfig = InMemoryBackendConfig;
+exports.isSuccess = function (status) { return (status >= 200 && status < 300); };
+/**
+ * Simulate the behavior of a RESTy web api
+ * backed by the simple in-memory data store provided by the injected InMemoryDataService service.
+ * Conforms mostly to behavior described here:
+ * http://www.restapitutorial.com/lessons/httpmethods.html
+ *
+ * ### Usage
+ *
+ * Create InMemoryDataService class the implements InMemoryDataService.
+ * Register both this service and the seed data as in:
+ * ```
+ * // other imports
+ * import { HTTPPROVIDERS, XHRBackend } from 'angular2/http';
+ * import { InMemoryBackendConfig, InMemoryBackendService, SEEDDATA } from '../in-memory-backend/in-memory-backend.service';
+ * import { InMemoryStoryService } from '../api/in-memory-story.service';
+ *
+ * @Component({
+ *   selector: ...,
+ *   templateUrl: ...,
+ *   providers: [
+ *     HTTPPROVIDERS,
+ *     provide(XHRBackend, { useClass: InMemoryBackendService }),
+ *     provide(SEEDDATA, { useClass: InMemoryStoryService }),
+ *     provide(InMemoryBackendConfig, { useValue: { delay: 600 } }),
+ *   ]
+ * })
+ * export class AppComponent { ... }
+ * ```
+ */
+var InMemoryBackendService = (function () {
+    function InMemoryBackendService(seedData, config) {
+        this.seedData = seedData;
+        this.config = new InMemoryBackendConfig();
+        this.resetDb();
+        var loc = this.getLocation('./');
+        this.config.host = loc.host;
+        this.config.rootPath = loc.pathname;
+        Object.assign(this.config, config);
+    }
+    InMemoryBackendService.prototype.createConnection = function (req) {
+        var res = this.handleRequest(req);
+        var response = new Observable_1.Observable(function (responseObserver) {
+            if (exports.isSuccess(res.status)) {
+                responseObserver.next(res);
+                responseObserver.complete();
+            }
+            else {
+                responseObserver.error(res);
+            }
+            return function () { }; // unsubscribe function
+        });
+        response = response.delay(this.config.delay || 500);
+        return {
+            readyState: http_1.ReadyState.Done,
+            request: req,
+            response: response
+        };
+    };
+    ////  protected /////
+    /**
+     * Process Request and return an Http Response object
+     * in the manner of a RESTy web api.
+     *
+     * Expect URI pattern in the form :base/:collectionName/:id?
+     * Examples:
+     *   // for store with a 'characters' collection
+     *   GET api/characters          // all characters
+     *   GET api/characters/42       // the character with id=42
+     *   GET api/characters?name=^j  // 'j' is a regex; returns characters whose name contains 'j' or 'J'
+     *   GET api/characters.json/42  // ignores the ".json"
+     *
+     *   POST commands/resetDb  // resets the "database"
+     */
+    InMemoryBackendService.prototype.handleRequest = function (req) {
+        var _a = this.parseUrl(req.url), base = _a.base, collectionName = _a.collectionName, id = _a.id, resourceUrl = _a.resourceUrl, query = _a.query;
+        var collection = this.db[collectionName];
+        var reqInfo = {
+            req: req,
+            base: base,
+            collection: collection,
+            collectionName: collectionName,
+            headers: new http_1.Headers({ 'Content-Type': 'application/json' }),
+            id: this.parseId(collection, id),
+            query: query,
+            resourceUrl: resourceUrl
+        };
+        var options;
+        try {
+            if ('commands' === reqInfo.base.toLowerCase()) {
+                options = this.commands(reqInfo);
+            }
+            else if (reqInfo.collection) {
+                switch (req.method) {
+                    case http_1.RequestMethod.Get:
+                        options = this.get(reqInfo);
+                        break;
+                    case http_1.RequestMethod.Post:
+                        options = this.post(reqInfo);
+                        break;
+                    case http_1.RequestMethod.Put:
+                        options = this.put(reqInfo);
+                        break;
+                    case http_1.RequestMethod.Delete:
+                        options = this.delete(reqInfo);
+                        break;
+                    default:
+                        options = this.createErrorResponse(http_status_codes_1.STATUS.METHOD_NOT_ALLOWED, 'Method not allowed');
+                        break;
+                }
+            }
+            else {
+                options = this.createErrorResponse(http_status_codes_1.STATUS.NOT_FOUND, "Collection '" + collectionName + "' not found");
+            }
+        }
+        catch (error) {
+            var err = error.message || error;
+            options = this.createErrorResponse(http_status_codes_1.STATUS.INTERNAL_SERVER_ERROR, "" + err);
+        }
+        options = this.setStatusText(options);
+        if (this.config.defaultResponseOptions) {
+            options = this.config.defaultResponseOptions.merge(options);
+        }
+        return new http_1.Response(options);
+    };
+    /**
+     * Apply query/search parameters as a filter over the collection
+     * This impl only supports RegExp queries on string properties of the collection
+     * ANDs the conditions together
+     */
+    InMemoryBackendService.prototype.applyQuery = function (collection, query) {
+        // extract filtering conditions - {propertyName, RegExps) - from query/search parameters
+        var conditions = [];
+        query.paramsMap.forEach(function (value, name) {
+            value.forEach(function (v) { return conditions.push({ name: name, rx: new RegExp(decodeURI(v), 'i') }); });
+        });
+        var len = conditions.length;
+        if (!len) {
+            return collection;
+        }
+        // AND the RegExp conditions
+        return collection.filter(function (row) {
+            var ok = true;
+            var i = len;
+            while (ok && i) {
+                i -= 1;
+                var cond = conditions[i];
+                ok = cond.rx.test(row[cond.name]);
+            }
+            return ok;
+        });
+    };
+    InMemoryBackendService.prototype.clone = function (data) {
+        return JSON.parse(JSON.stringify(data));
+    };
+    /**
+     * When the `base`="commands", the `collectionName` is the command
+     * Example URLs:
+     *   commands/resetdb   // Reset the "database" to its original state
+     *   commands/config (GET) // Return this service's config object
+     *   commands/config (!GET) // Update the config (e.g. delay)
+     *
+     * Usage:
+     *   http.post('commands/resetdb', null);
+     *   http.get('commands/config');
+     *   http.post('commands/config', '{"delay":1000}');
+     */
+    InMemoryBackendService.prototype.commands = function (reqInfo) {
+        var command = reqInfo.collectionName.toLowerCase();
+        var method = reqInfo.req.method;
+        var options;
+        switch (command) {
+            case 'resetdb':
+                this.resetDb();
+                options = new http_1.ResponseOptions({ status: http_status_codes_1.STATUS.OK });
+                break;
+            case 'config':
+                if (method === http_1.RequestMethod.Get) {
+                    options = new http_1.ResponseOptions({
+                        body: this.clone(this.config),
+                        status: http_status_codes_1.STATUS.OK
+                    });
+                }
+                else {
+                    // Be nice ... any other method is a config update
+                    var body = JSON.parse(reqInfo.req.text() || '{}');
+                    Object.assign(this.config, body);
+                    options = new http_1.ResponseOptions({ status: http_status_codes_1.STATUS.NO_CONTENT });
+                }
+                break;
+            default:
+                options = this.createErrorResponse(http_status_codes_1.STATUS.INTERNAL_SERVER_ERROR, "Unknown command \"" + command + "\"");
+        }
+        return options;
+    };
+    InMemoryBackendService.prototype.createErrorResponse = function (status, message) {
+        return new http_1.ResponseOptions({
+            body: { 'error': "" + message },
+            headers: new http_1.Headers({ 'Content-Type': 'application/json' }),
+            status: status
+        });
+    };
+    InMemoryBackendService.prototype.delete = function (_a) {
+        var id = _a.id, collection = _a.collection, collectionName = _a.collectionName, headers = _a.headers;
+        if (!id) {
+            return this.createErrorResponse(http_status_codes_1.STATUS.NOT_FOUND, "Missing \"" + collectionName + "\" id");
+        }
+        var exists = this.removeById(collection, id);
+        return new http_1.ResponseOptions({
+            headers: headers,
+            status: (exists || !this.config.delete404) ? http_status_codes_1.STATUS.NO_CONTENT : http_status_codes_1.STATUS.NOT_FOUND
+        });
+    };
+    InMemoryBackendService.prototype.findById = function (collection, id) {
+        return collection.find(function (item) { return item.id === id; });
+    };
+    InMemoryBackendService.prototype.genId = function (collection) {
+        // assumes numeric ids
+        var maxId = 0;
+        collection.reduce(function (prev, item) {
+            maxId = Math.max(maxId, typeof item.id === 'number' ? item.id : maxId);
+        }, null);
+        return maxId + 1;
+    };
+    InMemoryBackendService.prototype.get = function (_a) {
+        var id = _a.id, query = _a.query, collection = _a.collection, collectionName = _a.collectionName, headers = _a.headers;
+        var data = collection;
+        if (id) {
+            data = this.findById(collection, id);
+        }
+        else if (query) {
+            data = this.applyQuery(collection, query);
+        }
+        if (!data) {
+            return this.createErrorResponse(http_status_codes_1.STATUS.NOT_FOUND, "'" + collectionName + "' with id='" + id + "' not found");
+        }
+        return new http_1.ResponseOptions({
+            body: { data: this.clone(data) },
+            headers: headers,
+            status: http_status_codes_1.STATUS.OK
+        });
+    };
+    InMemoryBackendService.prototype.getLocation = function (href) {
+        var l = document.createElement('a');
+        l.href = href;
+        return l;
+    };
+    ;
+    InMemoryBackendService.prototype.indexOf = function (collection, id) {
+        return collection.findIndex(function (item) { return item.id === id; });
+    };
+    // tries to parse id as number if collection item.id is a number.
+    // returns the original param id otherwise.
+    InMemoryBackendService.prototype.parseId = function (collection, id) {
+        if (!id) {
+            return null;
+        }
+        var isNumberId = collection[0] && typeof collection[0].id === 'number';
+        if (isNumberId) {
+            var idNum = parseFloat(id);
+            return isNaN(idNum) ? id : idNum;
+        }
+        return id;
+    };
+    InMemoryBackendService.prototype.parseUrl = function (url) {
+        try {
+            var loc = this.getLocation(url);
+            var drop = this.config.rootPath.length;
+            var urlRoot = '';
+            if (loc.host !== this.config.host) {
+                // url for a server on a different host!
+                // assume it's collection is actually here too.
+                drop = 1; // the leading slash
+                urlRoot = loc.protocol + '//' + loc.host + '/';
+            }
+            var path = loc.pathname.substring(drop);
+            var _a = path.split('/'), base = _a[0], collectionName = _a[1], id = _a[2];
+            var resourceUrl = urlRoot + base + '/' + collectionName + '/';
+            collectionName = collectionName.split('.')[0]; // ignore anything after the '.', e.g., '.json'
+            var query = loc.search && new http_1.URLSearchParams(loc.search.substr(1));
+            return { base: base, id: id, collectionName: collectionName, resourceUrl: resourceUrl, query: query };
+        }
+        catch (err) {
+            var msg = "unable to parse url '" + url + "'; original error: " + err.message;
+            throw new Error(msg);
+        }
+    };
+    InMemoryBackendService.prototype.post = function (_a) {
+        var collection = _a.collection, headers = _a.headers, id = _a.id, req = _a.req, resourceUrl = _a.resourceUrl;
+        var item = JSON.parse(req.text());
+        if (!item.id) {
+            item.id = id || this.genId(collection);
+        }
+        // ignore the request id, if any. Alternatively,
+        // could reject request if id differs from item.id
+        id = item.id;
+        var existingIx = this.indexOf(collection, id);
+        if (existingIx > -1) {
+            collection[existingIx] = item;
+            return new http_1.ResponseOptions({
+                headers: headers,
+                status: http_status_codes_1.STATUS.NO_CONTENT
+            });
+        }
+        else {
+            collection.push(item);
+            headers.set('Location', resourceUrl + '/' + id);
+            return new http_1.ResponseOptions({
+                headers: headers,
+                body: { data: this.clone(item) },
+                status: http_status_codes_1.STATUS.CREATED
+            });
+        }
+    };
+    InMemoryBackendService.prototype.put = function (_a) {
+        var id = _a.id, collection = _a.collection, collectionName = _a.collectionName, headers = _a.headers, req = _a.req;
+        var item = JSON.parse(req.text());
+        if (!id) {
+            return this.createErrorResponse(http_status_codes_1.STATUS.NOT_FOUND, "Missing '" + collectionName + "' id");
+        }
+        if (id !== item.id) {
+            return this.createErrorResponse(http_status_codes_1.STATUS.BAD_REQUEST, "\"" + collectionName + "\" id does not match item.id");
+        }
+        var existingIx = this.indexOf(collection, id);
+        if (existingIx > -1) {
+            collection[existingIx] = item;
+            return new http_1.ResponseOptions({
+                headers: headers,
+                status: http_status_codes_1.STATUS.NO_CONTENT // successful; no content
+            });
+        }
+        else {
+            collection.push(item);
+            return new http_1.ResponseOptions({
+                body: { data: this.clone(item) },
+                headers: headers,
+                status: http_status_codes_1.STATUS.CREATED
+            });
+        }
+    };
+    InMemoryBackendService.prototype.removeById = function (collection, id) {
+        var ix = this.indexOf(collection, id);
+        if (ix > -1) {
+            collection.splice(ix, 1);
+            return true;
+        }
+        return false;
+    };
+    /**
+     * Reset the "database" to its original state
+     */
+    InMemoryBackendService.prototype.resetDb = function () {
+        this.db = this.seedData.createDb();
+    };
+    InMemoryBackendService.prototype.setStatusText = function (options) {
+        try {
+            var statusCode = http_status_codes_1.STATUS_CODE_INFO[options.status];
+            options['statusText'] = statusCode ? statusCode.text : 'Unknown Status';
+            return options;
+        }
+        catch (err) {
+            return new http_1.ResponseOptions({
+                status: http_status_codes_1.STATUS.INTERNAL_SERVER_ERROR,
+                statusText: 'Invalid Server Operation'
+            });
+        }
+    };
+    InMemoryBackendService = __decorate([
+        __param(0, core_1.Inject(exports.SEED_DATA)),
+        __param(1, core_1.Inject(InMemoryBackendConfig)),
+        __param(1, core_1.Optional()), 
+        __metadata('design:paramtypes', [Object, Object])
+    ], InMemoryBackendService);
+    return InMemoryBackendService;
+}());
+exports.InMemoryBackendService = InMemoryBackendService;
+
+},{"./http-status-codes":359,"@angular/core":160,"@angular/http":250,"rxjs/Observable":365,"rxjs/add/operator/delay":378}],361:[function(require,module,exports){
+"use strict";
+function __export(m) {
+    for (var p in m) if (!exports.hasOwnProperty(p)) exports[p] = m[p];
+}
+__export(require('./in-memory-backend.service'));
+__export(require('./http-status-codes'));
+
+},{"./http-status-codes":359,"./in-memory-backend.service":360}],362:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -46458,7 +49955,7 @@ var BehaviorSubject = (function (_super) {
 }(Subject_1.Subject));
 exports.BehaviorSubject = BehaviorSubject;
 
-},{"./Subject":340,"./util/ObjectUnsubscribedError":374,"./util/throwError":384}],335:[function(require,module,exports){
+},{"./Subject":368,"./util/ObjectUnsubscribedError":425,"./util/throwError":436}],363:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -46495,7 +49992,7 @@ var InnerSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.InnerSubscriber = InnerSubscriber;
 
-},{"./Subscriber":342}],336:[function(require,module,exports){
+},{"./Subscriber":370}],364:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('./Observable');
 /**
@@ -46622,7 +50119,7 @@ var Notification = (function () {
 }());
 exports.Notification = Notification;
 
-},{"./Observable":337}],337:[function(require,module,exports){
+},{"./Observable":365}],365:[function(require,module,exports){
 "use strict";
 var root_1 = require('./util/root');
 var observable_1 = require('./symbol/observable');
@@ -46758,7 +50255,7 @@ var Observable = (function () {
 }());
 exports.Observable = Observable;
 
-},{"./symbol/observable":372,"./util/root":382,"./util/toSubscriber":385}],338:[function(require,module,exports){
+},{"./symbol/observable":423,"./util/root":434,"./util/toSubscriber":437}],366:[function(require,module,exports){
 "use strict";
 exports.empty = {
     isUnsubscribed: true,
@@ -46767,7 +50264,7 @@ exports.empty = {
     complete: function () { }
 };
 
-},{}],339:[function(require,module,exports){
+},{}],367:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -46798,7 +50295,7 @@ var OuterSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.OuterSubscriber = OuterSubscriber;
 
-},{"./Subscriber":342}],340:[function(require,module,exports){
+},{"./Subscriber":370}],368:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47005,7 +50502,7 @@ var SubjectObservable = (function (_super) {
     return SubjectObservable;
 }(Observable_1.Observable));
 
-},{"./Observable":337,"./SubjectSubscription":341,"./Subscriber":342,"./Subscription":343,"./symbol/rxSubscriber":373,"./util/ObjectUnsubscribedError":374,"./util/throwError":384}],341:[function(require,module,exports){
+},{"./Observable":365,"./SubjectSubscription":369,"./Subscriber":370,"./Subscription":371,"./symbol/rxSubscriber":424,"./util/ObjectUnsubscribedError":425,"./util/throwError":436}],369:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47046,7 +50543,7 @@ var SubjectSubscription = (function (_super) {
 }(Subscription_1.Subscription));
 exports.SubjectSubscription = SubjectSubscription;
 
-},{"./Subscription":343}],342:[function(require,module,exports){
+},{"./Subscription":371}],370:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47298,7 +50795,7 @@ var SafeSubscriber = (function (_super) {
     return SafeSubscriber;
 }(Subscriber));
 
-},{"./Observer":338,"./Subscription":343,"./symbol/rxSubscriber":373,"./util/isFunction":378}],343:[function(require,module,exports){
+},{"./Observer":366,"./Subscription":371,"./symbol/rxSubscriber":424,"./util/isFunction":430}],371:[function(require,module,exports){
 "use strict";
 var isArray_1 = require('./util/isArray');
 var isObject_1 = require('./util/isObject');
@@ -47449,56 +50946,110 @@ var Subscription = (function () {
 }());
 exports.Subscription = Subscription;
 
-},{"./util/UnsubscriptionError":375,"./util/errorObject":376,"./util/isArray":377,"./util/isFunction":378,"./util/isObject":379,"./util/tryCatch":386}],344:[function(require,module,exports){
+},{"./util/UnsubscriptionError":426,"./util/errorObject":427,"./util/isArray":428,"./util/isFunction":430,"./util/isObject":431,"./util/tryCatch":438}],372:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var forkJoin_1 = require('../../observable/forkJoin');
 Observable_1.Observable.forkJoin = forkJoin_1.forkJoin;
 
-},{"../../Observable":337,"../../observable/forkJoin":360}],345:[function(require,module,exports){
+},{"../../Observable":365,"../../observable/forkJoin":398}],373:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var from_1 = require('../../observable/from');
 Observable_1.Observable.from = from_1.from;
 
-},{"../../Observable":337,"../../observable/from":361}],346:[function(require,module,exports){
+},{"../../Observable":365,"../../observable/from":399}],374:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../../Observable');
+var of_1 = require('../../observable/of');
+Observable_1.Observable.of = of_1.of;
+
+},{"../../Observable":365,"../../observable/of":401}],375:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../../Observable');
+var throw_1 = require('../../observable/throw');
+Observable_1.Observable.throw = throw_1._throw;
+
+},{"../../Observable":365,"../../observable/throw":402}],376:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../../Observable');
+var catch_1 = require('../../operator/catch');
+Observable_1.Observable.prototype.catch = catch_1._catch;
+
+},{"../../Observable":365,"../../operator/catch":403}],377:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../../Observable');
+var debounceTime_1 = require('../../operator/debounceTime');
+Observable_1.Observable.prototype.debounceTime = debounceTime_1.debounceTime;
+
+},{"../../Observable":365,"../../operator/debounceTime":404}],378:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../../Observable');
+var delay_1 = require('../../operator/delay');
+Observable_1.Observable.prototype.delay = delay_1.delay;
+
+},{"../../Observable":365,"../../operator/delay":405}],379:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../../Observable');
+var distinctUntilChanged_1 = require('../../operator/distinctUntilChanged');
+Observable_1.Observable.prototype.distinctUntilChanged = distinctUntilChanged_1.distinctUntilChanged;
+
+},{"../../Observable":365,"../../operator/distinctUntilChanged":406}],380:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../../Observable');
+var do_1 = require('../../operator/do');
+Observable_1.Observable.prototype.do = do_1._do;
+
+},{"../../Observable":365,"../../operator/do":407}],381:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var every_1 = require('../../operator/every');
 Observable_1.Observable.prototype.every = every_1.every;
 
-},{"../../Observable":337,"../../operator/every":364}],347:[function(require,module,exports){
+},{"../../Observable":365,"../../operator/every":408}],382:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../../Observable');
+var filter_1 = require('../../operator/filter');
+Observable_1.Observable.prototype.filter = filter_1.filter;
+
+},{"../../Observable":365,"../../operator/filter":409}],383:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var map_1 = require('../../operator/map');
 Observable_1.Observable.prototype.map = map_1.map;
 
-},{"../../Observable":337,"../../operator/map":365}],348:[function(require,module,exports){
+},{"../../Observable":365,"../../operator/map":410}],384:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var mergeAll_1 = require('../../operator/mergeAll');
 Observable_1.Observable.prototype.mergeAll = mergeAll_1.mergeAll;
 
-},{"../../Observable":337,"../../operator/mergeAll":366}],349:[function(require,module,exports){
+},{"../../Observable":365,"../../operator/mergeAll":411}],385:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var mergeMap_1 = require('../../operator/mergeMap');
 Observable_1.Observable.prototype.mergeMap = mergeMap_1.mergeMap;
 Observable_1.Observable.prototype.flatMap = mergeMap_1.mergeMap;
 
-},{"../../Observable":337,"../../operator/mergeMap":367}],350:[function(require,module,exports){
+},{"../../Observable":365,"../../operator/mergeMap":412}],386:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var reduce_1 = require('../../operator/reduce');
 Observable_1.Observable.prototype.reduce = reduce_1.reduce;
 
-},{"../../Observable":337,"../../operator/reduce":369}],351:[function(require,module,exports){
+},{"../../Observable":365,"../../operator/reduce":414}],387:[function(require,module,exports){
+"use strict";
+var Observable_1 = require('../../Observable');
+var switchMap_1 = require('../../operator/switchMap');
+Observable_1.Observable.prototype.switchMap = switchMap_1.switchMap;
+
+},{"../../Observable":365,"../../operator/switchMap":415}],388:[function(require,module,exports){
 "use strict";
 var Observable_1 = require('../../Observable');
 var toPromise_1 = require('../../operator/toPromise');
 Observable_1.Observable.prototype.toPromise = toPromise_1.toPromise;
 
-},{"../../Observable":337,"../../operator/toPromise":370}],352:[function(require,module,exports){
+},{"../../Observable":365,"../../operator/toPromise":416}],389:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47574,7 +51125,7 @@ var ArrayLikeObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ArrayLikeObservable = ArrayLikeObservable;
 
-},{"../Observable":337,"./EmptyObservable":354,"./ScalarObservable":359}],353:[function(require,module,exports){
+},{"../Observable":365,"./EmptyObservable":391,"./ScalarObservable":397}],390:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47697,7 +51248,7 @@ var ArrayObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ArrayObservable = ArrayObservable;
 
-},{"../Observable":337,"../util/isScheduler":381,"./EmptyObservable":354,"./ScalarObservable":359}],354:[function(require,module,exports){
+},{"../Observable":365,"../util/isScheduler":433,"./EmptyObservable":391,"./ScalarObservable":397}],391:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47773,7 +51324,90 @@ var EmptyObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.EmptyObservable = EmptyObservable;
 
-},{"../Observable":337}],355:[function(require,module,exports){
+},{"../Observable":365}],392:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Observable_1 = require('../Observable');
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @extends {Ignored}
+ * @hide true
+ */
+var ErrorObservable = (function (_super) {
+    __extends(ErrorObservable, _super);
+    function ErrorObservable(error, scheduler) {
+        _super.call(this);
+        this.error = error;
+        this.scheduler = scheduler;
+    }
+    /**
+     * Creates an Observable that emits no items to the Observer and immediately
+     * emits an error notification.
+     *
+     * <span class="informal">Just emits 'error', and nothing else.
+     * </span>
+     *
+     * <img src="./img/throw.png" width="100%">
+     *
+     * This static operator is useful for creating a simple Observable that only
+     * emits the error notification. It can be used for composing with other
+     * Observables, such as in a {@link mergeMap}.
+     *
+     * @example <caption>Emit the number 7, then emit an error.</caption>
+     * var result = Rx.Observable.throw(new Error('oops!')).startWith(7);
+     * result.subscribe(x => console.log(x), e => console.error(e));
+     *
+     * @example <caption>Map and flattens numbers to the sequence 'a', 'b', 'c', but throw an error for 13</caption>
+     * var interval = Rx.Observable.interval(1000);
+     * var result = interval.mergeMap(x =>
+     *   x === 13 ?
+     *     Rx.Observable.throw('Thirteens are bad') :
+     *     Rx.Observable.of('a', 'b', 'c')
+     * );
+     * result.subscribe(x => console.log(x), e => console.error(e));
+     *
+     * @see {@link create}
+     * @see {@link empty}
+     * @see {@link never}
+     * @see {@link of}
+     *
+     * @param {any} error The particular Error to pass to the error notification.
+     * @param {Scheduler} [scheduler] A {@link Scheduler} to use for scheduling
+     * the emission of the error notification.
+     * @return {Observable} An error Observable: emits only the error notification
+     * using the given error argument.
+     * @static true
+     * @name throw
+     * @owner Observable
+     */
+    ErrorObservable.create = function (error, scheduler) {
+        return new ErrorObservable(error, scheduler);
+    };
+    ErrorObservable.dispatch = function (arg) {
+        var error = arg.error, subscriber = arg.subscriber;
+        subscriber.error(error);
+    };
+    ErrorObservable.prototype._subscribe = function (subscriber) {
+        var error = this.error;
+        var scheduler = this.scheduler;
+        if (scheduler) {
+            return scheduler.schedule(ErrorObservable.dispatch, 0, {
+                error: error, subscriber: subscriber
+            });
+        }
+        else {
+            subscriber.error(error);
+        }
+    };
+    return ErrorObservable;
+}(Observable_1.Observable));
+exports.ErrorObservable = ErrorObservable;
+
+},{"../Observable":365}],393:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47885,7 +51519,7 @@ var ForkJoinSubscriber = (function (_super) {
     return ForkJoinSubscriber;
 }(OuterSubscriber_1.OuterSubscriber));
 
-},{"../Observable":337,"../OuterSubscriber":339,"../util/isArray":377,"../util/subscribeToResult":383,"./EmptyObservable":354}],356:[function(require,module,exports){
+},{"../Observable":365,"../OuterSubscriber":367,"../util/isArray":428,"../util/subscribeToResult":435,"./EmptyObservable":391}],394:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -47963,7 +51597,7 @@ var FromObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.FromObservable = FromObservable;
 
-},{"../Observable":337,"../operator/observeOn":368,"../symbol/iterator":371,"../symbol/observable":372,"../util/isArray":377,"../util/isFunction":378,"../util/isPromise":380,"../util/isScheduler":381,"./ArrayLikeObservable":352,"./ArrayObservable":353,"./IteratorObservable":357,"./PromiseObservable":358}],357:[function(require,module,exports){
+},{"../Observable":365,"../operator/observeOn":413,"../symbol/iterator":422,"../symbol/observable":423,"../util/isArray":428,"../util/isFunction":430,"../util/isPromise":432,"../util/isScheduler":433,"./ArrayLikeObservable":389,"./ArrayObservable":390,"./IteratorObservable":395,"./PromiseObservable":396}],395:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48157,7 +51791,7 @@ function sign(value) {
     return valueAsNumber < 0 ? -1 : 1;
 }
 
-},{"../Observable":337,"../symbol/iterator":371,"../util/errorObject":376,"../util/isFunction":378,"../util/isObject":379,"../util/root":382,"../util/tryCatch":386}],358:[function(require,module,exports){
+},{"../Observable":365,"../symbol/iterator":422,"../util/errorObject":427,"../util/isFunction":430,"../util/isObject":431,"../util/root":434,"../util/tryCatch":438}],396:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48263,7 +51897,7 @@ function dispatchError(arg) {
     }
 }
 
-},{"../Observable":337,"../util/root":382}],359:[function(require,module,exports){
+},{"../Observable":365,"../util/root":434}],397:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48319,27 +51953,512 @@ var ScalarObservable = (function (_super) {
 }(Observable_1.Observable));
 exports.ScalarObservable = ScalarObservable;
 
-},{"../Observable":337}],360:[function(require,module,exports){
+},{"../Observable":365}],398:[function(require,module,exports){
 "use strict";
 var ForkJoinObservable_1 = require('./ForkJoinObservable');
 exports.forkJoin = ForkJoinObservable_1.ForkJoinObservable.create;
 
-},{"./ForkJoinObservable":355}],361:[function(require,module,exports){
+},{"./ForkJoinObservable":393}],399:[function(require,module,exports){
 "use strict";
 var FromObservable_1 = require('./FromObservable');
 exports.from = FromObservable_1.FromObservable.create;
 
-},{"./FromObservable":356}],362:[function(require,module,exports){
+},{"./FromObservable":394}],400:[function(require,module,exports){
 "use strict";
 var PromiseObservable_1 = require('./PromiseObservable');
 exports.fromPromise = PromiseObservable_1.PromiseObservable.create;
 
-},{"./PromiseObservable":358}],363:[function(require,module,exports){
+},{"./PromiseObservable":396}],401:[function(require,module,exports){
 "use strict";
 var ArrayObservable_1 = require('./ArrayObservable');
 exports.of = ArrayObservable_1.ArrayObservable.of;
 
-},{"./ArrayObservable":353}],364:[function(require,module,exports){
+},{"./ArrayObservable":390}],402:[function(require,module,exports){
+"use strict";
+var ErrorObservable_1 = require('./ErrorObservable');
+exports._throw = ErrorObservable_1.ErrorObservable.create;
+
+},{"./ErrorObservable":392}],403:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Subscriber_1 = require('../Subscriber');
+/**
+ * Catches errors on the observable to be handled by returning a new observable or throwing an error.
+ * @param {function} selector a function that takes as arguments `err`, which is the error, and `caught`, which
+ *  is the source observable, in case you'd like to "retry" that observable by returning it again. Whatever observable
+ *  is returned by the `selector` will be used to continue the observable chain.
+ * @return {Observable} an observable that originates from either the source or the observable returned by the
+ *  catch `selector` function.
+ * @method catch
+ * @owner Observable
+ */
+function _catch(selector) {
+    var operator = new CatchOperator(selector);
+    var caught = this.lift(operator);
+    return (operator.caught = caught);
+}
+exports._catch = _catch;
+var CatchOperator = (function () {
+    function CatchOperator(selector) {
+        this.selector = selector;
+    }
+    CatchOperator.prototype.call = function (subscriber, source) {
+        return source._subscribe(new CatchSubscriber(subscriber, this.selector, this.caught));
+    };
+    return CatchOperator;
+}());
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var CatchSubscriber = (function (_super) {
+    __extends(CatchSubscriber, _super);
+    function CatchSubscriber(destination, selector, caught) {
+        _super.call(this, destination);
+        this.selector = selector;
+        this.caught = caught;
+    }
+    // NOTE: overriding `error` instead of `_error` because we don't want
+    // to have this flag this subscriber as `isStopped`.
+    CatchSubscriber.prototype.error = function (err) {
+        if (!this.isStopped) {
+            var result = void 0;
+            try {
+                result = this.selector(err, this.caught);
+            }
+            catch (err) {
+                this.destination.error(err);
+                return;
+            }
+            this._innerSub(result);
+        }
+    };
+    CatchSubscriber.prototype._innerSub = function (result) {
+        this.unsubscribe();
+        this.destination.remove(this);
+        result.subscribe(this.destination);
+    };
+    return CatchSubscriber;
+}(Subscriber_1.Subscriber));
+
+},{"../Subscriber":370}],404:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Subscriber_1 = require('../Subscriber');
+var async_1 = require('../scheduler/async');
+/**
+ * Returns the source Observable delayed by the computed debounce duration,
+ * with the duration lengthened if a new source item arrives before the delay
+ * duration ends.
+ * In practice, for each item emitted on the source, this operator holds the
+ * latest item, waits for a silence for the `dueTime` length, and only then
+ * emits the latest source item on the result Observable.
+ * Optionally takes a scheduler for manging timers.
+ * @param {number} dueTime the timeout value for the window of time required to not drop the item.
+ * @param {Scheduler} [scheduler] the Scheduler to use for managing the timers that handle the timeout for each item.
+ * @return {Observable} an Observable the same as source Observable, but drops items.
+ * @method debounceTime
+ * @owner Observable
+ */
+function debounceTime(dueTime, scheduler) {
+    if (scheduler === void 0) { scheduler = async_1.async; }
+    return this.lift(new DebounceTimeOperator(dueTime, scheduler));
+}
+exports.debounceTime = debounceTime;
+var DebounceTimeOperator = (function () {
+    function DebounceTimeOperator(dueTime, scheduler) {
+        this.dueTime = dueTime;
+        this.scheduler = scheduler;
+    }
+    DebounceTimeOperator.prototype.call = function (subscriber, source) {
+        return source._subscribe(new DebounceTimeSubscriber(subscriber, this.dueTime, this.scheduler));
+    };
+    return DebounceTimeOperator;
+}());
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var DebounceTimeSubscriber = (function (_super) {
+    __extends(DebounceTimeSubscriber, _super);
+    function DebounceTimeSubscriber(destination, dueTime, scheduler) {
+        _super.call(this, destination);
+        this.dueTime = dueTime;
+        this.scheduler = scheduler;
+        this.debouncedSubscription = null;
+        this.lastValue = null;
+        this.hasValue = false;
+    }
+    DebounceTimeSubscriber.prototype._next = function (value) {
+        this.clearDebounce();
+        this.lastValue = value;
+        this.hasValue = true;
+        this.add(this.debouncedSubscription = this.scheduler.schedule(dispatchNext, this.dueTime, this));
+    };
+    DebounceTimeSubscriber.prototype._complete = function () {
+        this.debouncedNext();
+        this.destination.complete();
+    };
+    DebounceTimeSubscriber.prototype.debouncedNext = function () {
+        this.clearDebounce();
+        if (this.hasValue) {
+            this.destination.next(this.lastValue);
+            this.lastValue = null;
+            this.hasValue = false;
+        }
+    };
+    DebounceTimeSubscriber.prototype.clearDebounce = function () {
+        var debouncedSubscription = this.debouncedSubscription;
+        if (debouncedSubscription !== null) {
+            this.remove(debouncedSubscription);
+            debouncedSubscription.unsubscribe();
+            this.debouncedSubscription = null;
+        }
+    };
+    return DebounceTimeSubscriber;
+}(Subscriber_1.Subscriber));
+function dispatchNext(subscriber) {
+    subscriber.debouncedNext();
+}
+
+},{"../Subscriber":370,"../scheduler/async":421}],405:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var async_1 = require('../scheduler/async');
+var isDate_1 = require('../util/isDate');
+var Subscriber_1 = require('../Subscriber');
+var Notification_1 = require('../Notification');
+/**
+ * Delays the emission of items from the source Observable by a given timeout or
+ * until a given Date.
+ *
+ * <span class="informal">Time shifts each item by some specified amount of
+ * milliseconds.</span>
+ *
+ * <img src="./img/delay.png" width="100%">
+ *
+ * If the delay argument is a Number, this operator time shifts the source
+ * Observable by that amount of time expressed in milliseconds. The relative
+ * time intervals between the values are preserved.
+ *
+ * If the delay argument is a Date, this operator time shifts the start of the
+ * Observable execution until the given date occurs.
+ *
+ * @example <caption>Delay each click by one second</caption>
+ * var clicks = Rx.Observable.fromEvent(document, 'click');
+ * var delayedClicks = clicks.delay(1000); // each click emitted after 1 second
+ * delayedClicks.subscribe(x => console.log(x));
+ *
+ * @example <caption>Delay all clicks until a future date happens</caption>
+ * var clicks = Rx.Observable.fromEvent(document, 'click');
+ * var date = new Date('March 15, 2050 12:00:00'); // in the future
+ * var delayedClicks = clicks.delay(date); // click emitted only after that date
+ * delayedClicks.subscribe(x => console.log(x));
+ *
+ * @see {@link debounceTime}
+ * @see {@link delayWhen}
+ *
+ * @param {number|Date} delay The delay duration in milliseconds (a `number`) or
+ * a `Date` until which the emission of the source items is delayed.
+ * @param {Scheduler} [scheduler=async] The Scheduler to use for
+ * managing the timers that handle the time-shift for each item.
+ * @return {Observable} An Observable that delays the emissions of the source
+ * Observable by the specified timeout or Date.
+ * @method delay
+ * @owner Observable
+ */
+function delay(delay, scheduler) {
+    if (scheduler === void 0) { scheduler = async_1.async; }
+    var absoluteDelay = isDate_1.isDate(delay);
+    var delayFor = absoluteDelay ? (+delay - scheduler.now()) : Math.abs(delay);
+    return this.lift(new DelayOperator(delayFor, scheduler));
+}
+exports.delay = delay;
+var DelayOperator = (function () {
+    function DelayOperator(delay, scheduler) {
+        this.delay = delay;
+        this.scheduler = scheduler;
+    }
+    DelayOperator.prototype.call = function (subscriber, source) {
+        return source._subscribe(new DelaySubscriber(subscriber, this.delay, this.scheduler));
+    };
+    return DelayOperator;
+}());
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var DelaySubscriber = (function (_super) {
+    __extends(DelaySubscriber, _super);
+    function DelaySubscriber(destination, delay, scheduler) {
+        _super.call(this, destination);
+        this.delay = delay;
+        this.scheduler = scheduler;
+        this.queue = [];
+        this.active = false;
+        this.errored = false;
+    }
+    DelaySubscriber.dispatch = function (state) {
+        var source = state.source;
+        var queue = source.queue;
+        var scheduler = state.scheduler;
+        var destination = state.destination;
+        while (queue.length > 0 && (queue[0].time - scheduler.now()) <= 0) {
+            queue.shift().notification.observe(destination);
+        }
+        if (queue.length > 0) {
+            var delay_1 = Math.max(0, queue[0].time - scheduler.now());
+            this.schedule(state, delay_1);
+        }
+        else {
+            source.active = false;
+        }
+    };
+    DelaySubscriber.prototype._schedule = function (scheduler) {
+        this.active = true;
+        this.add(scheduler.schedule(DelaySubscriber.dispatch, this.delay, {
+            source: this, destination: this.destination, scheduler: scheduler
+        }));
+    };
+    DelaySubscriber.prototype.scheduleNotification = function (notification) {
+        if (this.errored === true) {
+            return;
+        }
+        var scheduler = this.scheduler;
+        var message = new DelayMessage(scheduler.now() + this.delay, notification);
+        this.queue.push(message);
+        if (this.active === false) {
+            this._schedule(scheduler);
+        }
+    };
+    DelaySubscriber.prototype._next = function (value) {
+        this.scheduleNotification(Notification_1.Notification.createNext(value));
+    };
+    DelaySubscriber.prototype._error = function (err) {
+        this.errored = true;
+        this.queue = [];
+        this.destination.error(err);
+    };
+    DelaySubscriber.prototype._complete = function () {
+        this.scheduleNotification(Notification_1.Notification.createComplete());
+    };
+    return DelaySubscriber;
+}(Subscriber_1.Subscriber));
+var DelayMessage = (function () {
+    function DelayMessage(time, notification) {
+        this.time = time;
+        this.notification = notification;
+    }
+    return DelayMessage;
+}());
+
+},{"../Notification":364,"../Subscriber":370,"../scheduler/async":421,"../util/isDate":429}],406:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Subscriber_1 = require('../Subscriber');
+var tryCatch_1 = require('../util/tryCatch');
+var errorObject_1 = require('../util/errorObject');
+/**
+ * Returns an Observable that emits all items emitted by the source Observable that are distinct by comparison from the previous item.
+ * If a comparator function is provided, then it will be called for each item to test for whether or not that value should be emitted.
+ * If a comparator function is not provided, an equality check is used by default.
+ * @param {function} [compare] optional comparison function called to test if an item is distinct from the previous item in the source.
+ * @return {Observable} an Observable that emits items from the source Observable with distinct values.
+ * @method distinctUntilChanged
+ * @owner Observable
+ */
+function distinctUntilChanged(compare, keySelector) {
+    return this.lift(new DistinctUntilChangedOperator(compare, keySelector));
+}
+exports.distinctUntilChanged = distinctUntilChanged;
+var DistinctUntilChangedOperator = (function () {
+    function DistinctUntilChangedOperator(compare, keySelector) {
+        this.compare = compare;
+        this.keySelector = keySelector;
+    }
+    DistinctUntilChangedOperator.prototype.call = function (subscriber, source) {
+        return source._subscribe(new DistinctUntilChangedSubscriber(subscriber, this.compare, this.keySelector));
+    };
+    return DistinctUntilChangedOperator;
+}());
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var DistinctUntilChangedSubscriber = (function (_super) {
+    __extends(DistinctUntilChangedSubscriber, _super);
+    function DistinctUntilChangedSubscriber(destination, compare, keySelector) {
+        _super.call(this, destination);
+        this.keySelector = keySelector;
+        this.hasKey = false;
+        if (typeof compare === 'function') {
+            this.compare = compare;
+        }
+    }
+    DistinctUntilChangedSubscriber.prototype.compare = function (x, y) {
+        return x === y;
+    };
+    DistinctUntilChangedSubscriber.prototype._next = function (value) {
+        var keySelector = this.keySelector;
+        var key = value;
+        if (keySelector) {
+            key = tryCatch_1.tryCatch(this.keySelector)(value);
+            if (key === errorObject_1.errorObject) {
+                return this.destination.error(errorObject_1.errorObject.e);
+            }
+        }
+        var result = false;
+        if (this.hasKey) {
+            result = tryCatch_1.tryCatch(this.compare)(this.key, key);
+            if (result === errorObject_1.errorObject) {
+                return this.destination.error(errorObject_1.errorObject.e);
+            }
+        }
+        else {
+            this.hasKey = true;
+        }
+        if (Boolean(result) === false) {
+            this.key = key;
+            this.destination.next(value);
+        }
+    };
+    return DistinctUntilChangedSubscriber;
+}(Subscriber_1.Subscriber));
+
+},{"../Subscriber":370,"../util/errorObject":427,"../util/tryCatch":438}],407:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Subscriber_1 = require('../Subscriber');
+/**
+ * Perform a side effect for every emission on the source Observable, but return
+ * an Observable that is identical to the source.
+ *
+ * <span class="informal">Intercepts each emission on the source and runs a
+ * function, but returns an output which is identical to the source.</span>
+ *
+ * <img src="./img/do.png" width="100%">
+ *
+ * Returns a mirrored Observable of the source Observable, but modified so that
+ * the provided Observer is called to perform a side effect for every value,
+ * error, and completion emitted by the source. Any errors that are thrown in
+ * the aforementioned Observer or handlers are safely sent down the error path
+ * of the output Observable.
+ *
+ * This operator is useful for debugging your Observables for the correct values
+ * or performing other side effects.
+ *
+ * Note: this is different to a `subscribe` on the Observable. If the Observable
+ * returned by `do` is not subscribed, the side effects specified by the
+ * Observer will never happen. `do` therefore simply spies on existing
+ * execution, it does not trigger an execution to happen like `subscribe` does.
+ *
+ * @example <caption>Map every every click to the clientX position of that click, while also logging the click event</caption>
+ * var clicks = Rx.Observable.fromEvent(document, 'click');
+ * var positions = clicks
+ *   .do(ev => console.log(ev))
+ *   .map(ev => ev.clientX);
+ * positions.subscribe(x => console.log(x));
+ *
+ * @see {@link map}
+ * @see {@link subscribe}
+ *
+ * @param {Observer|function} [nextOrObserver] A normal Observer object or a
+ * callback for `next`.
+ * @param {function} [error] Callback for errors in the source.
+ * @param {function} [complete] Callback for the completion of the source.
+ * @return {Observable} An Observable identical to the source, but runs the
+ * specified Observer or callback(s) for each item.
+ * @method do
+ * @name do
+ * @owner Observable
+ */
+function _do(nextOrObserver, error, complete) {
+    return this.lift(new DoOperator(nextOrObserver, error, complete));
+}
+exports._do = _do;
+var DoOperator = (function () {
+    function DoOperator(nextOrObserver, error, complete) {
+        this.nextOrObserver = nextOrObserver;
+        this.error = error;
+        this.complete = complete;
+    }
+    DoOperator.prototype.call = function (subscriber, source) {
+        return source._subscribe(new DoSubscriber(subscriber, this.nextOrObserver, this.error, this.complete));
+    };
+    return DoOperator;
+}());
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var DoSubscriber = (function (_super) {
+    __extends(DoSubscriber, _super);
+    function DoSubscriber(destination, nextOrObserver, error, complete) {
+        _super.call(this, destination);
+        var safeSubscriber = new Subscriber_1.Subscriber(nextOrObserver, error, complete);
+        safeSubscriber.syncErrorThrowable = true;
+        this.add(safeSubscriber);
+        this.safeSubscriber = safeSubscriber;
+    }
+    DoSubscriber.prototype._next = function (value) {
+        var safeSubscriber = this.safeSubscriber;
+        safeSubscriber.next(value);
+        if (safeSubscriber.syncErrorThrown) {
+            this.destination.error(safeSubscriber.syncErrorValue);
+        }
+        else {
+            this.destination.next(value);
+        }
+    };
+    DoSubscriber.prototype._error = function (err) {
+        var safeSubscriber = this.safeSubscriber;
+        safeSubscriber.error(err);
+        if (safeSubscriber.syncErrorThrown) {
+            this.destination.error(safeSubscriber.syncErrorValue);
+        }
+        else {
+            this.destination.error(err);
+        }
+    };
+    DoSubscriber.prototype._complete = function () {
+        var safeSubscriber = this.safeSubscriber;
+        safeSubscriber.complete();
+        if (safeSubscriber.syncErrorThrown) {
+            this.destination.error(safeSubscriber.syncErrorValue);
+        }
+        else {
+            this.destination.complete();
+        }
+    };
+    return DoSubscriber;
+}(Subscriber_1.Subscriber));
+
+},{"../Subscriber":370}],408:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48409,7 +52528,101 @@ var EverySubscriber = (function (_super) {
     return EverySubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":342}],365:[function(require,module,exports){
+},{"../Subscriber":370}],409:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var Subscriber_1 = require('../Subscriber');
+/**
+ * Filter items emitted by the source Observable by only emitting those that
+ * satisfy a specified predicate.
+ *
+ * <span class="informal">Like
+ * [Array.prototype.filter()](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/filter),
+ * it only emits a value from the source if it passes a criterion function.</span>
+ *
+ * <img src="./img/filter.png" width="100%">
+ *
+ * Similar to the well-known `Array.prototype.filter` method, this operator
+ * takes values from the source Observable, passes them through a `predicate`
+ * function and only emits those values that yielded `true`.
+ *
+ * @example <caption>Emit only click events whose target was a DIV element</caption>
+ * var clicks = Rx.Observable.fromEvent(document, 'click');
+ * var clicksOnDivs = clicks.filter(ev => ev.target.tagName === 'DIV');
+ * clicksOnDivs.subscribe(x => console.log(x));
+ *
+ * @see {@link distinct}
+ * @see {@link distinctKey}
+ * @see {@link distinctUntilChanged}
+ * @see {@link distinctUntilKeyChanged}
+ * @see {@link ignoreElements}
+ * @see {@link partition}
+ * @see {@link skip}
+ *
+ * @param {function(value: T, index: number): boolean} predicate A function that
+ * evaluates each value emitted by the source Observable. If it returns `true`,
+ * the value is emitted, if `false` the value is not passed to the output
+ * Observable. The `index` parameter is the number `i` for the i-th source
+ * emission that has happened since the subscription, starting from the number
+ * `0`.
+ * @param {any} [thisArg] An optional argument to determine the value of `this`
+ * in the `predicate` function.
+ * @return {Observable} An Observable of values from the source that were
+ * allowed by the `predicate` function.
+ * @method filter
+ * @owner Observable
+ */
+function filter(predicate, thisArg) {
+    return this.lift(new FilterOperator(predicate, thisArg));
+}
+exports.filter = filter;
+var FilterOperator = (function () {
+    function FilterOperator(predicate, thisArg) {
+        this.predicate = predicate;
+        this.thisArg = thisArg;
+    }
+    FilterOperator.prototype.call = function (subscriber, source) {
+        return source._subscribe(new FilterSubscriber(subscriber, this.predicate, this.thisArg));
+    };
+    return FilterOperator;
+}());
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var FilterSubscriber = (function (_super) {
+    __extends(FilterSubscriber, _super);
+    function FilterSubscriber(destination, predicate, thisArg) {
+        _super.call(this, destination);
+        this.predicate = predicate;
+        this.thisArg = thisArg;
+        this.count = 0;
+        this.predicate = predicate;
+    }
+    // the try catch block below is left specifically for
+    // optimization and perf reasons. a tryCatcher is not necessary here.
+    FilterSubscriber.prototype._next = function (value) {
+        var result;
+        try {
+            result = this.predicate.call(this.thisArg, value, this.count++);
+        }
+        catch (err) {
+            this.destination.error(err);
+            return;
+        }
+        if (result) {
+            this.destination.next(value);
+        }
+    };
+    return FilterSubscriber;
+}(Subscriber_1.Subscriber));
+
+},{"../Subscriber":370}],410:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48496,7 +52709,7 @@ var MapSubscriber = (function (_super) {
     return MapSubscriber;
 }(Subscriber_1.Subscriber));
 
-},{"../Subscriber":342}],366:[function(require,module,exports){
+},{"../Subscriber":370}],411:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48608,7 +52821,7 @@ var MergeAllSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeAllSubscriber = MergeAllSubscriber;
 
-},{"../OuterSubscriber":339,"../util/subscribeToResult":383}],367:[function(require,module,exports){
+},{"../OuterSubscriber":367,"../util/subscribeToResult":435}],412:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48770,7 +52983,7 @@ var MergeMapSubscriber = (function (_super) {
 }(OuterSubscriber_1.OuterSubscriber));
 exports.MergeMapSubscriber = MergeMapSubscriber;
 
-},{"../OuterSubscriber":339,"../util/subscribeToResult":383}],368:[function(require,module,exports){
+},{"../OuterSubscriber":367,"../util/subscribeToResult":435}],413:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48846,7 +53059,7 @@ var ObserveOnMessage = (function () {
 }());
 exports.ObserveOnMessage = ObserveOnMessage;
 
-},{"../Notification":336,"../Subscriber":342}],369:[function(require,module,exports){
+},{"../Notification":364,"../Subscriber":370}],414:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -48931,7 +53144,147 @@ var ReduceSubscriber = (function (_super) {
 }(Subscriber_1.Subscriber));
 exports.ReduceSubscriber = ReduceSubscriber;
 
-},{"../Subscriber":342}],370:[function(require,module,exports){
+},{"../Subscriber":370}],415:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var OuterSubscriber_1 = require('../OuterSubscriber');
+var subscribeToResult_1 = require('../util/subscribeToResult');
+/**
+ * Projects each source value to an Observable which is merged in the output
+ * Observable, emitting values only from the most recently projected Observable.
+ *
+ * <span class="informal">Maps each value to an Observable, then flattens all of
+ * these inner Observables using {@link switch}.</span>
+ *
+ * <img src="./img/switchMap.png" width="100%">
+ *
+ * Returns an Observable that emits items based on applying a function that you
+ * supply to each item emitted by the source Observable, where that function
+ * returns an (so-called "inner") Observable. Each time it observes one of these
+ * inner Observables, the output Observable begins emitting the items emitted by
+ * that inner Observable. When a new inner Observable is emitted, `switchMap`
+ * stops emitting items from the earlier-emitted inner Observable and begins
+ * emitting items from the new one. It continues to behave like this for
+ * subsequent inner Observables.
+ *
+ * @example <caption>Rerun an interval Observable on every click event</caption>
+ * var clicks = Rx.Observable.fromEvent(document, 'click');
+ * var result = clicks.switchMap((ev) => Rx.Observable.interval(1000));
+ * result.subscribe(x => console.log(x));
+ *
+ * @see {@link concatMap}
+ * @see {@link exhaustMap}
+ * @see {@link mergeMap}
+ * @see {@link switch}
+ * @see {@link switchMapTo}
+ *
+ * @param {function(value: T, ?index: number): Observable} project A function
+ * that, when applied to an item emitted by the source Observable, returns an
+ * Observable.
+ * @param {function(outerValue: T, innerValue: I, outerIndex: number, innerIndex: number): any} [resultSelector]
+ * A function to produce the value on the output Observable based on the values
+ * and the indices of the source (outer) emission and the inner Observable
+ * emission. The arguments passed to this function are:
+ * - `outerValue`: the value that came from the source
+ * - `innerValue`: the value that came from the projected Observable
+ * - `outerIndex`: the "index" of the value that came from the source
+ * - `innerIndex`: the "index" of the value from the projected Observable
+ * @return {Observable} An Observable that emits the result of applying the
+ * projection function (and the optional `resultSelector`) to each item emitted
+ * by the source Observable and taking only the values from the most recently
+ * projected inner Observable.
+ * @method switchMap
+ * @owner Observable
+ */
+function switchMap(project, resultSelector) {
+    return this.lift(new SwitchMapOperator(project, resultSelector));
+}
+exports.switchMap = switchMap;
+var SwitchMapOperator = (function () {
+    function SwitchMapOperator(project, resultSelector) {
+        this.project = project;
+        this.resultSelector = resultSelector;
+    }
+    SwitchMapOperator.prototype.call = function (subscriber, source) {
+        return source._subscribe(new SwitchMapSubscriber(subscriber, this.project, this.resultSelector));
+    };
+    return SwitchMapOperator;
+}());
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var SwitchMapSubscriber = (function (_super) {
+    __extends(SwitchMapSubscriber, _super);
+    function SwitchMapSubscriber(destination, project, resultSelector) {
+        _super.call(this, destination);
+        this.project = project;
+        this.resultSelector = resultSelector;
+        this.index = 0;
+    }
+    SwitchMapSubscriber.prototype._next = function (value) {
+        var result;
+        var index = this.index++;
+        try {
+            result = this.project(value, index);
+        }
+        catch (error) {
+            this.destination.error(error);
+            return;
+        }
+        this._innerSub(result, value, index);
+    };
+    SwitchMapSubscriber.prototype._innerSub = function (result, value, index) {
+        var innerSubscription = this.innerSubscription;
+        if (innerSubscription) {
+            innerSubscription.unsubscribe();
+        }
+        this.add(this.innerSubscription = subscribeToResult_1.subscribeToResult(this, result, value, index));
+    };
+    SwitchMapSubscriber.prototype._complete = function () {
+        var innerSubscription = this.innerSubscription;
+        if (!innerSubscription || innerSubscription.isUnsubscribed) {
+            _super.prototype._complete.call(this);
+        }
+    };
+    SwitchMapSubscriber.prototype._unsubscribe = function () {
+        this.innerSubscription = null;
+    };
+    SwitchMapSubscriber.prototype.notifyComplete = function (innerSub) {
+        this.remove(innerSub);
+        this.innerSubscription = null;
+        if (this.isStopped) {
+            _super.prototype._complete.call(this);
+        }
+    };
+    SwitchMapSubscriber.prototype.notifyNext = function (outerValue, innerValue, outerIndex, innerIndex, innerSub) {
+        if (this.resultSelector) {
+            this._tryNotifyNext(outerValue, innerValue, outerIndex, innerIndex);
+        }
+        else {
+            this.destination.next(innerValue);
+        }
+    };
+    SwitchMapSubscriber.prototype._tryNotifyNext = function (outerValue, innerValue, outerIndex, innerIndex) {
+        var result;
+        try {
+            result = this.resultSelector(outerValue, innerValue, outerIndex, innerIndex);
+        }
+        catch (err) {
+            this.destination.error(err);
+            return;
+        }
+        this.destination.next(result);
+    };
+    return SwitchMapSubscriber;
+}(OuterSubscriber_1.OuterSubscriber));
+
+},{"../OuterSubscriber":367,"../util/subscribeToResult":435}],416:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 /**
@@ -48960,7 +53313,248 @@ function toPromise(PromiseCtor) {
 }
 exports.toPromise = toPromise;
 
-},{"../util/root":382}],371:[function(require,module,exports){
+},{"../util/root":434}],417:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var FutureAction_1 = require('./FutureAction');
+var QueueScheduler_1 = require('./QueueScheduler');
+var AsyncScheduler = (function (_super) {
+    __extends(AsyncScheduler, _super);
+    function AsyncScheduler() {
+        _super.apply(this, arguments);
+    }
+    AsyncScheduler.prototype.scheduleNow = function (work, state) {
+        return new FutureAction_1.FutureAction(this, work).schedule(state, 0);
+    };
+    return AsyncScheduler;
+}(QueueScheduler_1.QueueScheduler));
+exports.AsyncScheduler = AsyncScheduler;
+
+},{"./FutureAction":418,"./QueueScheduler":420}],418:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var root_1 = require('../util/root');
+var Subscription_1 = require('../Subscription');
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var FutureAction = (function (_super) {
+    __extends(FutureAction, _super);
+    function FutureAction(scheduler, work) {
+        _super.call(this);
+        this.scheduler = scheduler;
+        this.work = work;
+        this.pending = false;
+    }
+    FutureAction.prototype.execute = function () {
+        if (this.isUnsubscribed) {
+            this.error = new Error('executing a cancelled action');
+        }
+        else {
+            try {
+                this.work(this.state);
+            }
+            catch (e) {
+                this.unsubscribe();
+                this.error = e;
+            }
+        }
+    };
+    FutureAction.prototype.schedule = function (state, delay) {
+        if (delay === void 0) { delay = 0; }
+        if (this.isUnsubscribed) {
+            return this;
+        }
+        return this._schedule(state, delay);
+    };
+    FutureAction.prototype._schedule = function (state, delay) {
+        var _this = this;
+        if (delay === void 0) { delay = 0; }
+        // Always replace the current state with the new state.
+        this.state = state;
+        // Set the pending flag indicating that this action has been scheduled, or
+        // has recursively rescheduled itself.
+        this.pending = true;
+        var id = this.id;
+        // If this action has an intervalID and the specified delay matches the
+        // delay we used to create the intervalID, don't call `setInterval` again.
+        if (id != null && this.delay === delay) {
+            return this;
+        }
+        this.delay = delay;
+        // If this action has an intervalID, but was rescheduled with a different
+        // `delay` time, cancel the current intervalID and call `setInterval` with
+        // the new `delay` time.
+        if (id != null) {
+            this.id = null;
+            root_1.root.clearInterval(id);
+        }
+        //
+        // Important implementation note:
+        //
+        // By default, FutureAction only executes once. However, Actions have the
+        // ability to be rescheduled from within the scheduled callback (mimicking
+        // recursion for asynchronous methods). This allows us to implement single
+        // and repeated actions with the same code path without adding API surface
+        // area, and implement tail-call optimization over asynchronous boundaries.
+        //
+        // However, JS runtimes make a distinction between intervals scheduled by
+        // repeatedly calling `setTimeout` vs. a single `setInterval` call, with
+        // the latter providing a better guarantee of precision.
+        //
+        // In order to accommodate both single and repeatedly rescheduled actions,
+        // use `setInterval` here for both cases. By default, the interval will be
+        // canceled after its first execution, or if the action schedules itself to
+        // run again with a different `delay` time.
+        //
+        // If the action recursively schedules itself to run again with the same
+        // `delay` time, the interval is not canceled, but allowed to loop again.
+        // The check of whether the interval should be canceled or not is run every
+        // time the interval is executed. The first time an action fails to
+        // reschedule itself, the interval is canceled.
+        //
+        this.id = root_1.root.setInterval(function () {
+            _this.pending = false;
+            var _a = _this, id = _a.id, scheduler = _a.scheduler;
+            scheduler.actions.push(_this);
+            scheduler.flush();
+            //
+            // Terminate this interval if the action didn't reschedule itself.
+            // Don't call `this.unsubscribe()` here, because the action could be
+            // rescheduled later. For example:
+            //
+            // ```
+            // scheduler.schedule(function doWork(counter) {
+            //   /* ... I'm a busy worker bee ... */
+            //   var originalAction = this;
+            //   /* wait 100ms before rescheduling this action again */
+            //   setTimeout(function () {
+            //     originalAction.schedule(counter + 1);
+            //   }, 100);
+            // }, 1000);
+            // ```
+            if (_this.pending === false && id != null) {
+                _this.id = null;
+                root_1.root.clearInterval(id);
+            }
+        }, delay);
+        return this;
+    };
+    FutureAction.prototype._unsubscribe = function () {
+        this.pending = false;
+        var _a = this, id = _a.id, scheduler = _a.scheduler;
+        var actions = scheduler.actions;
+        var index = actions.indexOf(this);
+        if (id != null) {
+            this.id = null;
+            root_1.root.clearInterval(id);
+        }
+        if (index !== -1) {
+            actions.splice(index, 1);
+        }
+        this.work = null;
+        this.state = null;
+        this.scheduler = null;
+    };
+    return FutureAction;
+}(Subscription_1.Subscription));
+exports.FutureAction = FutureAction;
+
+},{"../Subscription":371,"../util/root":434}],419:[function(require,module,exports){
+"use strict";
+var __extends = (this && this.__extends) || function (d, b) {
+    for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+};
+var FutureAction_1 = require('./FutureAction');
+/**
+ * We need this JSDoc comment for affecting ESDoc.
+ * @ignore
+ * @extends {Ignored}
+ */
+var QueueAction = (function (_super) {
+    __extends(QueueAction, _super);
+    function QueueAction() {
+        _super.apply(this, arguments);
+    }
+    QueueAction.prototype._schedule = function (state, delay) {
+        if (delay === void 0) { delay = 0; }
+        if (delay > 0) {
+            return _super.prototype._schedule.call(this, state, delay);
+        }
+        this.delay = delay;
+        this.state = state;
+        var scheduler = this.scheduler;
+        scheduler.actions.push(this);
+        scheduler.flush();
+        return this;
+    };
+    return QueueAction;
+}(FutureAction_1.FutureAction));
+exports.QueueAction = QueueAction;
+
+},{"./FutureAction":418}],420:[function(require,module,exports){
+"use strict";
+var QueueAction_1 = require('./QueueAction');
+var FutureAction_1 = require('./FutureAction');
+var QueueScheduler = (function () {
+    function QueueScheduler() {
+        this.active = false;
+        this.actions = []; // XXX: use `any` to remove type param `T` from `VirtualTimeScheduler`.
+        this.scheduledId = null;
+    }
+    QueueScheduler.prototype.now = function () {
+        return Date.now();
+    };
+    QueueScheduler.prototype.flush = function () {
+        if (this.active || this.scheduledId) {
+            return;
+        }
+        this.active = true;
+        var actions = this.actions;
+        // XXX: use `any` to remove type param `T` from `VirtualTimeScheduler`.
+        for (var action = null; action = actions.shift();) {
+            action.execute();
+            if (action.error) {
+                this.active = false;
+                throw action.error;
+            }
+        }
+        this.active = false;
+    };
+    QueueScheduler.prototype.schedule = function (work, delay, state) {
+        if (delay === void 0) { delay = 0; }
+        return (delay <= 0) ?
+            this.scheduleNow(work, state) :
+            this.scheduleLater(work, delay, state);
+    };
+    QueueScheduler.prototype.scheduleNow = function (work, state) {
+        return new QueueAction_1.QueueAction(this, work).schedule(state);
+    };
+    QueueScheduler.prototype.scheduleLater = function (work, delay, state) {
+        return new FutureAction_1.FutureAction(this, work).schedule(state, delay);
+    };
+    return QueueScheduler;
+}());
+exports.QueueScheduler = QueueScheduler;
+
+},{"./FutureAction":418,"./QueueAction":419}],421:[function(require,module,exports){
+"use strict";
+var AsyncScheduler_1 = require('./AsyncScheduler');
+exports.async = new AsyncScheduler_1.AsyncScheduler();
+
+},{"./AsyncScheduler":417}],422:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 var Symbol = root_1.root.Symbol;
@@ -48993,7 +53587,7 @@ else {
     }
 }
 
-},{"../util/root":382}],372:[function(require,module,exports){
+},{"../util/root":434}],423:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 var Symbol = root_1.root.Symbol;
@@ -49015,14 +53609,14 @@ else {
     exports.$$observable = '@@observable';
 }
 
-},{"../util/root":382}],373:[function(require,module,exports){
+},{"../util/root":434}],424:[function(require,module,exports){
 "use strict";
 var root_1 = require('../util/root');
 var Symbol = root_1.root.Symbol;
 exports.$$rxSubscriber = (typeof Symbol === 'function' && typeof Symbol.for === 'function') ?
     Symbol.for('rxSubscriber') : '@@rxSubscriber';
 
-},{"../util/root":382}],374:[function(require,module,exports){
+},{"../util/root":434}],425:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49048,7 +53642,7 @@ var ObjectUnsubscribedError = (function (_super) {
 }(Error));
 exports.ObjectUnsubscribedError = ObjectUnsubscribedError;
 
-},{}],375:[function(require,module,exports){
+},{}],426:[function(require,module,exports){
 "use strict";
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
@@ -49071,44 +53665,51 @@ var UnsubscriptionError = (function (_super) {
 }(Error));
 exports.UnsubscriptionError = UnsubscriptionError;
 
-},{}],376:[function(require,module,exports){
+},{}],427:[function(require,module,exports){
 "use strict";
 // typeof any so that it we don't have to cast when comparing a result to the error object
 exports.errorObject = { e: {} };
 
-},{}],377:[function(require,module,exports){
+},{}],428:[function(require,module,exports){
 "use strict";
 exports.isArray = Array.isArray || (function (x) { return x && typeof x.length === 'number'; });
 
-},{}],378:[function(require,module,exports){
+},{}],429:[function(require,module,exports){
+"use strict";
+function isDate(value) {
+    return value instanceof Date && !isNaN(+value);
+}
+exports.isDate = isDate;
+
+},{}],430:[function(require,module,exports){
 "use strict";
 function isFunction(x) {
     return typeof x === 'function';
 }
 exports.isFunction = isFunction;
 
-},{}],379:[function(require,module,exports){
+},{}],431:[function(require,module,exports){
 "use strict";
 function isObject(x) {
     return x != null && typeof x === 'object';
 }
 exports.isObject = isObject;
 
-},{}],380:[function(require,module,exports){
+},{}],432:[function(require,module,exports){
 "use strict";
 function isPromise(value) {
     return value && typeof value.subscribe !== 'function' && typeof value.then === 'function';
 }
 exports.isPromise = isPromise;
 
-},{}],381:[function(require,module,exports){
+},{}],433:[function(require,module,exports){
 "use strict";
 function isScheduler(value) {
     return value && typeof value.schedule === 'function';
 }
 exports.isScheduler = isScheduler;
 
-},{}],382:[function(require,module,exports){
+},{}],434:[function(require,module,exports){
 (function (global){
 "use strict";
 var objectTypes = {
@@ -49130,7 +53731,7 @@ if (freeGlobal && (freeGlobal.global === freeGlobal || freeGlobal.window === fre
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 
-},{}],383:[function(require,module,exports){
+},{}],435:[function(require,module,exports){
 "use strict";
 var root_1 = require('./root');
 var isArray_1 = require('./isArray');
@@ -49202,12 +53803,12 @@ function subscribeToResult(outerSubscriber, result, outerValue, outerIndex) {
 }
 exports.subscribeToResult = subscribeToResult;
 
-},{"../InnerSubscriber":335,"../Observable":337,"../symbol/iterator":371,"../symbol/observable":372,"./isArray":377,"./isPromise":380,"./root":382}],384:[function(require,module,exports){
+},{"../InnerSubscriber":363,"../Observable":365,"../symbol/iterator":422,"../symbol/observable":423,"./isArray":428,"./isPromise":432,"./root":434}],436:[function(require,module,exports){
 "use strict";
 function throwError(e) { throw e; }
 exports.throwError = throwError;
 
-},{}],385:[function(require,module,exports){
+},{}],437:[function(require,module,exports){
 "use strict";
 var Subscriber_1 = require('../Subscriber');
 var rxSubscriber_1 = require('../symbol/rxSubscriber');
@@ -49224,7 +53825,7 @@ function toSubscriber(nextOrObserver, error, complete) {
 }
 exports.toSubscriber = toSubscriber;
 
-},{"../Subscriber":342,"../symbol/rxSubscriber":373}],386:[function(require,module,exports){
+},{"../Subscriber":370,"../symbol/rxSubscriber":424}],438:[function(require,module,exports){
 "use strict";
 var errorObject_1 = require('./errorObject');
 var tryCatchTarget;
@@ -49244,7 +53845,7 @@ function tryCatch(fn) {
 exports.tryCatch = tryCatch;
 ;
 
-},{"./errorObject":376}]},{},[7])
+},{"./errorObject":427}]},{},[11])
 
 
 //# sourceMappingURL=bundle.js.map
