@@ -4,6 +4,7 @@
 "use strict";
 var ng_core = require('@angular/core');
 var ng_router =  require('@angular/router');
+require('./rxjs-extensions');
 
 var heroService = require('./hero.services');
 

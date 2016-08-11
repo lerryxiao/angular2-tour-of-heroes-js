@@ -19,7 +19,9 @@ var path = {
     hero: './app/Hero.js',
     heroService: './app/hero.services.js',
     routes: './app/app.routes.js',
-    dashboardComponent: './app/dashboard.component.js'
+    dashboardComponent: './app/dashboard.component.js',
+    heroSearchService: './app/hero.search.service.js',
+    heroSearchComponent: './app/hero.search.component.js'
 }
 
 // set browserify task
@@ -47,7 +49,9 @@ gulp.task("default", ['browserify'], function () {
         path.heroDetail,
         path.heroService,
         path.routes,
-        path.dashboardComponent
+        path.dashboardComponent,
+        path.heroSearchComponent,
+        path.heroSearchService
     ], ['browserify']);
     console.log("default task");
 })
