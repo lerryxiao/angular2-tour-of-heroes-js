@@ -11,11 +11,8 @@ var in_memory_data_service = require('./in-memory-data.service');
 var app_comment = require('./app.component');
 var appRouterProviders = require('./app.routes');
 
-document.addEventListener('DOMContentLoaded', function() {
-    platform_browser_dynamic.bootstrap(app_comment.AppComponent,[
-        appRouterProviders.AppRouterProviders,
-        http.HTTP_PROVIDERS,
-        { provide: http.XHRBackend, useClass: angular2_in_memory_web_api.InMemoryBackendService },
-        { provide: angular2_in_memory_web_api.SEED_DATA, useClass: in_memory_data_service.InMemoryDataService }
-    ]);
-});
+platform_browser_dynamic.bootstrap(app_comment.AppComponent, [
+    appRouterProviders.AppRouterProviders,
+    http.HTTP_PROVIDERS,
+    {provide: http.XHRBackend, useClass: angular2_in_memory_web_api.InMemoryBackendService},
+    {provide: angular2_in_memory_web_api.SEED_DATA, useClass: in_memory_data_service.InMemoryDataService}]);
